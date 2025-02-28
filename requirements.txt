@@ -1,0 +1,6 @@
+torch
+numpy
+matplotlib
+vizdoom
+portpicker
+gym
