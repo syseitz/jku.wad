@@ -21,7 +21,15 @@ class VizDoomReward:
     ) -> Tuple:
         self._step += 1
         _ = game_var, game_var_old, player_id
-        return (vizdoom_reward,)
+        rwd_hit = (
+            1.0 if (game_var["HITCOUNT"] - game_var_old["HITCOUNT"]) > 0.0 else 0.0
+        )
+        rwd_frag = 10.0 * (game_var["FRAGCOUNT"] - game_var_old["FRAGCOUNT"])
+        return (
+            vizdoom_reward,
+            rwd_hit,
+            rwd_frag,
+        )
 
     def outcome(self):
         # TODO check this out

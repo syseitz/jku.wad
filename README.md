@@ -1,9 +1,11 @@
 # `jku.wad`
 <div align="center">
-<picture>
-<img src="media/doom_cover.jpg" alt="DOOM" width="300"/>
-</picture>
+    <picture>
+    <img src="media/doom_cover.jpg" alt="DOOM" width="300"/>
+    </picture>
 </div>
+
+---
 
 `jku.wad` is the final challenge for the 2025 deep reinforcement learning course at JKU.
 

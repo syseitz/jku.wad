@@ -5,16 +5,18 @@ Arena: a toolkit for Multi-Agent Reinforcement Learning https://arxiv.org/abs/19
 All credits to authors.
 """
 
-from typing import Callable, Optional, Sequence, List
+from typing import Callable, Optional, Sequence, List, Union
 
 from copy import deepcopy
 from collections import deque
 from portpicker import pick_unused_port
 import numpy as np
 import torch
+from collections import defaultdict
+import copy
 
-import vizdoom as vd
-import gym
+import vizdoom as vzd
+from gym import Env
 from gym.spaces import Box, MultiDiscrete, Discrete
 
 from arena.parallel import ParallelEnv
@@ -22,35 +24,42 @@ from arena.utils import get_action_dim, get_screen_shape
 from arena.actions import VIZDOOM_ACTIONS
 from arena.reward import VizDoomReward
 from arena.player import (
+    ObsBuffer,
     PlayerHostConfig,
     PlayerJoinConfig,
     PlayerConfig,
     player_setup,
     player_host_setup,
     player_join_setup,
+    mp_game_setup,
 )
 
 
-class PlayerEnv(gym.Env):
-    """ViZDoom per player environment, tuned for CIG Track 1 Death Match.
+class PlayerEnv(Env):
+    """ViZDoom per player environment."""
 
-    Use Wu Yuxing"s trick to enhance the action.
-    TODO(pengsun): move the action-enhancement logic to an Interface?"""
-
-    def __init__(
-        self, cfg, transforms: Optional[Callable] = None, discrete6: bool = True
-    ):
+    def __init__(self, cfg: PlayerConfig, discrete6: bool = True, frame_skip: int = 2):
         self.cfg = cfg
-        self.game = None
         self.discrete6 = discrete6
-        self.transforms = transforms
+        self.transforms = cfg.transform
+        self.record = False
+        self.replay = None
+        self.frame_skip = frame_skip
+
+        self.game = None
 
         # TODO does not account for transforms
         self.observation_space = Box(
             low=0,
             high=255,
             dtype=np.uint8,
-            shape=get_screen_shape(cfg.screen_format, cfg.screen_resolution),
+            shape=get_screen_shape(
+                cfg.screen_format,
+                cfg.screen_resolution,
+                labels=cfg.use_labels,
+                depth=cfg.use_depth,
+                automap=cfg.use_automap,
+            ),
         )
         if discrete6:
             # simplified
@@ -60,15 +69,12 @@ class PlayerEnv(gym.Env):
             self.action_space = MultiDiscrete([2] * get_action_dim(cfg))
 
         self._state = None
-        self._obs = None
-        self._rwd = None
-        self._done = None
-        self._act = None
         self._game_var_list = None
         self._game_vars = {}
         self._game_vars_pre = {}
 
         self.history = deque(maxlen=60)
+        self.frame_stack = deque(maxlen=cfg.n_stack_frames)
 
     def repeat_action(self, action):
         cnt = 1
@@ -80,8 +86,8 @@ class PlayerEnv(gym.Env):
         act = int(act)
         return VIZDOOM_ACTIONS[act]
 
-    def adjust_doom_action(self, action):
-        """Convert to Discrete(6) action to the full allowed action."""
+    def adjust_action(self, action):
+        # TODO what does this do?
         self.history.append(action)
         is_attacking = VIZDOOM_ACTIONS[1] in list(self.history)[-3:]
         if action in [VIZDOOM_ACTIONS[4], VIZDOOM_ACTIONS[5]]:
@@ -127,15 +133,19 @@ class PlayerEnv(gym.Env):
             self._init_game()
             if self.cfg.num_bots > 0:
                 self._add_bot()
+            self.game.new_episode()
 
-        self._state, self._obs, self._done = self._grab()
-        self._update_vars()
+        self._state, obs, _ = self._grab()
+        self._update_game_vars()
+        obs = self._update_frame_stack(obs, reset=True)
+
+        self._record_replay(obs, reset=True)
 
         # apply (frame) transforms
         if self.transforms is not None:
-            self._obs = self.transforms(self._obs)
+            obs = self.transforms(obs)
 
-        return self._obs
+        return obs
 
     def step(self, action):
         if isinstance(action, np.ndarray) or isinstance(action, torch.Tensor):
@@ -143,30 +153,28 @@ class PlayerEnv(gym.Env):
         if self.discrete6:
             action = self.discrete6_to_button(action)
         # vizdoom step
-        self._rwd = self.game.make_action(
-            self.adjust_doom_action(action), self.cfg.repeat_frame
-        )
-        self._state, self._obs, self._done = self._grab()
-        self._update_vars()
+        rwd = self.game.make_action(self.adjust_action(action), tics=self.frame_skip)
+        self._state, obs, done = self._grab()
+        self._update_game_vars()
+        obs = self._update_frame_stack(obs)
+
+        self._record_replay(obs)
 
         # apply (frame) transforms
         if self.transforms is not None:
-            self._obs = self.transforms(self._obs)
+            obs = self.transforms(obs)
 
-        return self._obs, self._rwd, self._done, {}
+        return obs, rwd, done, {}
 
     def close(self):
         if self.game:
             self.game.close()
 
-    def render(self, *args):
-        return self._obs
-
     def _init_game(self):
         self.close()
-
-        game = vd.DoomGame()
+        game = vzd.DoomGame()
         game = player_setup(game, self.cfg)
+        game = mp_game_setup(game)
         if self.cfg.is_multiplayer_game:
             if self.cfg.host_cfg is not None:
                 game = player_host_setup(game, self.cfg.host_cfg)
@@ -174,27 +182,55 @@ class PlayerEnv(gym.Env):
                 game = player_join_setup(game, self.cfg.join_cfg)
             else:
                 raise ValueError("neither host nor join, error!")
-        game.set_window_visible(False)
+        game.set_window_visible(False)  # NOTE: for devices without screen
         game.init()
         self.game = game
         self._game_var_list = self.game.get_available_game_variables()
-        self._update_vars()
+        self._update_game_vars()
 
     def _grab(self):
         state = self.game.get_state()
         done = self.game.is_episode_finished()
         if done:
-            obs = np.ndarray(self.observation_space.shape, self.observation_space.dtype)
+            # set observation to black if done
+            tmp = np.ndarray(self.observation_space.shape, self.observation_space.dtype)
+            obs = {"screen": tmp[:3]}
+            if self.cfg.use_labels:
+                obs["labels"] = tmp[3:4]
+            if self.cfg.use_depth:
+                obs["depth"] = tmp[4:5]
+            if self.cfg.use_automap:
+                obs["automap"] = tmp[5:]
         else:
-            obs = state.screen_buffer
+            obs = {"screen": state.screen_buffer}
+            if state.labels_buffer is not None:
+                obs["labels"] = state.labels_buffer[None]
+            if state.depth_buffer is not None:
+                obs["depth"] = state.depth_buffer[None]
+            if state.automap_buffer is not None:
+                obs["automap"] = state.automap_buffer
         return state, obs, done
+
+    def _update_frame_stack(self, obs, reset: bool = False):
+        if reset:
+            # clear and populate frame stack
+            self.frame_stack.clear()
+            for _ in range(self.frame_stack.maxlen):
+                self.frame_stack.append(obs)
+        else:
+            self.frame_stack.append(obs)
+
+        # return stacked observation dictionary
+        buffers = {k: [frames[k] for frames in self.frame_stack] for k in obs}
+        obs = {k: np.stack(v, axis=0) for k, v in buffers.items()}  # (b, t, h, w)
+        return obs
 
     def _add_bot(self):
         self.game.send_game_command("removebots")
         for i in range(self.cfg.num_bots):
             self.game.send_game_command("addbot")
 
-    def _update_vars(self):
+    def _update_game_vars(self):
         self._game_vars_pre = deepcopy(self._game_vars)
         if self.unwrapped._state is not None:  # ensure current frame is available
             for key in self._game_var_list:
@@ -206,8 +242,17 @@ class PlayerEnv(gym.Env):
             if self._game_vars["HEALTH"] < 0.0:
                 self._game_vars["HEALTH"] = 0.0
 
+    def _record_replay(self, obs, reset: bool = False):
+        if reset:
+            self.replay = defaultdict(list)
 
-class VizdoomMPEnv(gym.Env):
+        if self.record:
+            self.replay["tic"].append(self.game.get_episode_time())
+            self.replay["frames"].append(obs["screen"])
+            self.replay["game_vars"].append(copy.deepcopy(self._game_vars))
+
+
+class VizdoomMPEnv(Env):
     """ViZDoom multi-player environment."""
 
     def __init__(
@@ -218,12 +263,25 @@ class VizdoomMPEnv(gym.Env):
         num_bots: int = 0,
         discrete6: bool = True,
         episode_timeout: int = 2000,
-        # TODO
+        n_stack_frames: Union[int, List[int]] = 1,
+        extra_state: Optional[Union[List[ObsBuffer], List[List[ObsBuffer]]]] = None,
+        ticrate: int = 35,
+        doom_map: str = "map01",
+        respawns: bool = True,
         custom_game_variables: Optional[List[str]] = None,
-        player_transforms: Optional[Sequence[Callable]] = None,
+        player_transform: Optional[Sequence[Callable]] = None,
     ):
+        # limited and full deathmatch
+        # NOTE map02 is large!
+        assert doom_map in ["map01", "map02"]
         self.num_players = num_players
         self.num_bots = num_bots
+        if not isinstance(n_stack_frames, Sequence):
+            n_stack_frames = [n_stack_frames] * num_players
+        if not isinstance(player_transform, Sequence):
+            player_transform = [player_transform] * num_players
+        if extra_state is not None and not isinstance(extra_state[0], Sequence):
+            extra_state = [extra_state] * num_players
         # select empty port for multiplayer
         self.port = pick_unused_port()
         # host cfg
@@ -236,11 +294,21 @@ class VizdoomMPEnv(gym.Env):
         for i in range(self.host_cfg.num_players):
             cfg = PlayerConfig()
             cfg.config_path = config_path
-            cfg.player_mode = vd.Mode.PLAYER
-            cfg.screen_resolution = vd.ScreenResolution.RES_256X192
-            cfg.screen_format = vd.ScreenFormat.CBCGCR
+            cfg.player_mode = vzd.Mode.PLAYER
+            cfg.screen_resolution = vzd.ScreenResolution.RES_256X192
+            cfg.screen_format = vzd.ScreenFormat.CBCGCR
+            cfg.ticrate = ticrate
+            cfg.respawns = respawns
+            cfg.n_stack_frames = n_stack_frames[i]
+            cfg.transform = player_transform[i]
+            if extra_state is not None:
+                cfg.use_labels = ObsBuffer.LABELS in extra_state[i]
+                cfg.use_depth = ObsBuffer.DEPTH in extra_state[i]
+                cfg.use_automap = ObsBuffer.AUTOMAP in extra_state[i]
             if custom_game_variables is not None:
                 cfg.available_game_variables = custom_game_variables
+            if doom_map is not None:
+                cfg.doom_map = doom_map
             cfg.episode_timeout = episode_timeout
             if i == 0:  # host
                 cfg.host_cfg = self.host_cfg
@@ -251,12 +319,9 @@ class VizdoomMPEnv(gym.Env):
                 cfg.name = "P{}".format(i)
             self.players_cfg.append(cfg)
 
-        if not isinstance(player_transforms, Sequence):
-            player_transforms = [player_transforms] * len(self.players_cfg)
-
         self.envs = []
         for i, cfg in enumerate(self.players_cfg):
-            e = PlayerEnv(cfg, transforms=player_transforms[i], discrete6=discrete6)
+            e = PlayerEnv(cfg, discrete6=discrete6)
             self.envs.append(e)
 
         if len(self.envs) == 1:
@@ -278,9 +343,7 @@ class VizdoomMPEnv(gym.Env):
             obs = [obs]
             vizdoom_rwds = [vizdoom_rwds]
             dones = [dones]
-        info["alive"] = dones
-        # terminate a single player is alive
-        done = sum(dones) >= len(dones)
+        done = all(dones)
 
         rwds = []
         for player_idx in range(self.num_players):
@@ -306,3 +369,19 @@ class VizdoomMPEnv(gym.Env):
         if len(self.envs) == 1:
             self.obs = [self.obs]
         return self.obs
+
+    def enable_replay(self):
+        for e in self.envs:
+            e.record = True
+
+    def disable_replay(self):
+        for e in self.envs:
+            e.record = False
+
+    def get_player_replays(self):
+        replays = {}
+        for e in self.envs:
+            if e.record:
+                replays[e.cfg.name] = e.replay
+
+        return replays

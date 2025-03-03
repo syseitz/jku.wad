@@ -1,16 +1,16 @@
-import vizdoom as vd
+import vizdoom as vzd
 
 VIZDOOM_BUTTONS = [
-    vd.Button.ATTACK,
-    vd.Button.TURN_LEFT,
-    vd.Button.TURN_RIGHT,
-    vd.Button.MOVE_RIGHT,
-    vd.Button.MOVE_LEFT,
-    vd.Button.MOVE_FORWARD,
-    vd.Button.MOVE_BACKWARD,
-    vd.Button.SPEED,
-    vd.Button.TURN180,
-    vd.Button.TURN_LEFT_RIGHT_DELTA,
+    vzd.Button.ATTACK,
+    vzd.Button.TURN_LEFT,
+    vzd.Button.TURN_RIGHT,
+    vzd.Button.MOVE_RIGHT,
+    vzd.Button.MOVE_LEFT,
+    vzd.Button.MOVE_FORWARD,
+    vzd.Button.MOVE_BACKWARD,
+    vzd.Button.SPEED,
+    vzd.Button.TURN180,
+    vzd.Button.TURN_LEFT_RIGHT_DELTA,
 ]
 
 # first 6 are core actions

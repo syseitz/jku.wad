@@ -1,26 +1,32 @@
 import os
 import sys
 import re
-import vizdoom as vd
+import vizdoom as vzd
 from contextlib import contextmanager
 
 from arena.player import player_setup
 
 
 CHANNELS = {
-    vd.ScreenFormat.CBCGCR: 3,
-    vd.ScreenFormat.GRAY8: 3,
+    vzd.ScreenFormat.CBCGCR: 3,
+    vzd.ScreenFormat.GRAY8: 3,
 }
 
 
-def get_screen_shape(screen_format, screen_resolution):
-    ch = CHANNELS[screen_format]
+def get_screen_shape(
+    screen_format,
+    screen_resolution,
+    labels: bool = False,
+    depth: bool = False,
+    automap: bool = False,
+):
+    ch = CHANNELS[screen_format] + int(labels) + int(depth) + 3 * int(automap)
     match = re.search(r"RES_(\d+)X(\d+)", str(screen_resolution))
     return ch, int(match.group(1)), int(match.group(2))
 
 
 def get_action_dim(player_cfg):
-    g = vd.DoomGame()
+    g = vzd.DoomGame()
     g = player_setup(g, player_cfg)
     return len(g.get_available_buttons())
 
