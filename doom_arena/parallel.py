@@ -71,28 +71,26 @@ class ParallelEnv(gym.Env):
     """Vectorize a list of environments as a single environment."""
 
     def __init__(self, envs):
-        self.observation_space = Tuple([e.observation_space for e in envs])
-        self.action_space = Tuple([e.action_space for e in envs])
+        self._spectator_envs = [e for e in envs if e.is_spectator]
+        self._player_envs = [e for e in envs if not e.is_spectator]
 
-        self._envs = envs
+        self.observation_space = Tuple([e.observation_space for e in self._player_envs])
+        self.action_space = Tuple([e.action_space for e in self._player_envs])
+
         self._par = RunParallel()
 
     def reset(self):
-        observations = self._par.run((e.reset) for e in self._envs)
+        observations = self._par.run((e.reset) for e in self.envs)
         return observations
 
     def step(self, actions):
-        ret = self._par.run((e.step, act) for e, act in zip(self._envs, actions))
+        ret = self._par.run((e.step, act) for e, act in zip(self._player_envs, actions))
         observations, rewards, dones, infos = [item for item in zip(*ret)]
         return observations, rewards, dones, {}
 
     def close(self):
-        self._par.run((e.close) for e in self._envs)
-
-    def render(self, *args):
-        obs = self._par.run((e.render) for e in self._envs)
-        return obs
+        self._par.run((e.close) for e in self._player_envs)
 
     @property
     def envs(self):
-        return self._envs
+        return self._spectator_envs + self._player_envs

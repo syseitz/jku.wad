@@ -28,6 +28,7 @@ class PlayerConfig(object):
         # custom character
         self.name = None
         self.colorset = None
+        self.crosshair = None
         # observation settings
         self.transform = None
         self.use_depth = False
@@ -52,15 +53,26 @@ class PlayerConfig(object):
             vzd.GameVariable.POSITION_X,
             vzd.GameVariable.POSITION_Y,
         ]
+        # game buttons
+        self.available_buttons = [
+            vzd.Button.MOVE_FORWARD,
+            vzd.Button.ATTACK,
+            vzd.Button.MOVE_LEFT,
+            vzd.Button.MOVE_RIGHT,
+            vzd.Button.TURN_LEFT,
+            vzd.Button.TURN_RIGHT,
+            # vzd.Button.USE,
+            # vzd.Button.MOVE_BACKWARD,
+        ]
 
         # game map
         self.doom_map = None
+        self.doom_skill = 1
 
         self.n_stack_frames = 1
         self.num_bots = 0
         self.respawns = False
 
-        self.is_multiplayer_game = True
         self.host_cfg = None
         self.join_cfg = None
 
@@ -113,9 +125,16 @@ def player_setup(game, player_config: PlayerConfig):
     if player_config.doom_map is not None:
         game.set_doom_map(player_config.doom_map)
 
+    if player_config.doom_skill is not None:
+        game.set_doom_skill(player_config.doom_skill)
+
     # custom game variables
     if player_config.available_game_variables is not None:
         game.set_available_game_variables(player_config.available_game_variables)
+
+    # custom game buttons
+    if player_config.available_buttons is not None:
+        game.set_available_buttons(player_config.available_buttons)
 
     # depth
     if player_config.use_depth:
@@ -137,15 +156,27 @@ def player_setup(game, player_config: PlayerConfig):
     if player_config.colorset is not None:
         game.add_game_args("+colorset {}".format(player_config.colorset))
 
+    if player_config.crosshair is not None:
+        game.set_render_crosshair(player_config.crosshair)
+
     if player_config.respawns:
         # respawn automatically after death
         game.add_game_args("+sv_forcerespawn 1")
         # invulnerable for two second after spawning
         game.add_game_args("+sv_respawnprotect 1")
-        # spawn as far away from other players
-        game.add_game_args("+sv_spawnfarthest 1")
         # seconds between respawns
         game.add_game_args(f"+viz_respawn_delay 5")
+    return game
+
+
+def mp_game_setup(game):
+    # respawn items
+    game.add_game_args("+altdeath 1")
+    # no crouching
+    game.add_game_args("+sv_nocrouch 1")
+    # no monsters
+    game.add_game_args("+sv_nomonsters 1")
+    game.add_game_args("+nomonsters 1")
     return game
 
 
@@ -153,17 +184,3 @@ class ObsBuffer(enum.Enum):
     LABELS = "labels"
     DEPTH = "depth"
     AUTOMAP = "automap"
-
-
-def mp_game_setup(game):
-    # respawn items
-    game.add_game_args("+altdeath 1")
-    # deathmatch rules
-    game.add_game_args("+deathmatch 1")
-    # no crouching
-    game.add_game_args("+sv_nocrouch 1")
-    # no cheats
-    game.add_game_args("+viz_nocheat 1")
-    # no monsters
-    game.add_game_args("+nomonsters 1")
-    return game

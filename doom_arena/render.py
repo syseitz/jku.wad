@@ -22,13 +22,14 @@ def render_episode(player_replays, subsample: int = 1, replay_path: str = None):
     player_stats = {}
     for pid, replay in player_replays.items():
         # Apply subsampling to frames and game variables
-        vid_frames[pid] = np.concatenate(replay["frames"][::subsample], 0)
+        vid_frames[pid] = np.stack(replay["frames"][::subsample], 0)
         player_stats[pid] = {
-            "health": [v["HEALTH"] for v in replay["game_vars"][::subsample]],
-            "frags": [v["FRAGCOUNT"] for v in replay["game_vars"][::subsample]],
-            "deaths": [v["DEATHCOUNT"] for v in replay["game_vars"][::subsample]],
+            "health": [v.get("HEALTH", 0) for v in replay["game_vars"][::subsample]],
+            "frags": [v.get("FRAGCOUNT", 0) for v in replay["game_vars"][::subsample]],
+            "deaths": [
+                v.get("DEATHCOUNT", 0) for v in replay["game_vars"][::subsample]
+            ],
         }
-
     imagexn = {pid: np.transpose(vid_frames[pid][0], (1, 2, 0)) for pid in vid_frames}
     plotxn = {}
     for i, (pid, img) in enumerate(imagexn.items()):
@@ -70,7 +71,7 @@ def render_episode(player_replays, subsample: int = 1, replay_path: str = None):
         fig,
         update,
         frames=min([f.shape[0] for f in vid_frames.values()]),
-        interval=1000 // 30,
+        interval=1000 // 30 * subsample,
         blit=True,
     )
 

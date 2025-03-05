@@ -19,11 +19,10 @@ import vizdoom as vzd
 from gym import Env
 from gym.spaces import Box, MultiDiscrete, Discrete
 
-from arena.parallel import ParallelEnv
-from arena.utils import get_action_dim, get_screen_shape
-from arena.actions import VIZDOOM_ACTIONS
-from arena.reward import VizDoomReward
-from arena.player import (
+from doom_arena.parallel import ParallelEnv
+from doom_arena.utils import get_doom_buttons, get_screen_shape
+from doom_arena.reward import VizDoomReward
+from doom_arena.player import (
     ObsBuffer,
     PlayerHostConfig,
     PlayerJoinConfig,
@@ -34,6 +33,24 @@ from arena.player import (
     mp_game_setup,
 )
 
+# TODO what does this do?
+VIZDOOM_ACTIONS = [
+    [0, 0, 0, 0, 0, 1, 0, 1, 0, 0],  # 0 move fast forward
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # 1 fire
+    [0, 0, 0, 1, 0, 0, 0, 1, 0, 0],  # 2 move left
+    [0, 0, 0, 0, 1, 0, 0, 1, 0, 0],  # 3 move right
+    [0, 1, 0, 0, 0, 0, 0, 1, 0, 0],  # 4 turn left
+    [0, 0, 1, 0, 0, 0, 0, 1, 0, 0],  # 5 turn right
+    [0, 1, 0, 0, 0, 0, 0, 0, 0, 20],  # 6 turn left 20 degree and move forward
+    [0, 0, 1, 0, 0, 0, 0, 0, 0, 20],  # 7 turn right 20 degree and move forward
+    [0, 0, 0, 0, 0, 1, 0, 0, 0, 0],  # 8 move forward
+    [0, 0, 0, 0, 0, 0, 0, 0, 1, 0],  # 9 turn 180
+    [0, 0, 0, 1, 0, 0, 0, 0, 0, 0],  # 10 move left
+    [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],  # 11 move right
+    [0, 1, 0, 0, 0, 0, 0, 0, 0, 0],  # 12 turn left
+    [0, 0, 1, 0, 0, 0, 0, 0, 0, 0],  # 13 turn right
+]
+
 
 class PlayerEnv(Env):
     """ViZDoom per player environment."""
@@ -41,14 +58,14 @@ class PlayerEnv(Env):
     def __init__(self, cfg: PlayerConfig, discrete6: bool = True, frame_skip: int = 2):
         self.cfg = cfg
         self.discrete6 = discrete6
-        self.transforms = cfg.transform
+        self.transform = cfg.transform
         self.record = False
         self.replay = None
+        self.is_spectator = cfg.player_mode == vzd.Mode.SPECTATOR
         self.frame_skip = frame_skip
 
         self.game = None
 
-        # TODO does not account for transforms
         self.observation_space = Box(
             low=0,
             high=255,
@@ -61,12 +78,15 @@ class PlayerEnv(Env):
                 automap=cfg.use_automap,
             ),
         )
+
+        self._buttons = get_doom_buttons(cfg)
         if discrete6:
             # simplified
-            self.action_space = Discrete(6)
+            self.action_space = Discrete(len(self._buttons))
         else:
+            # TODO what does this do?
             # actual button space
-            self.action_space = MultiDiscrete([2] * get_action_dim(cfg))
+            self.action_space = MultiDiscrete([2] * len(self._buttons))
 
         self._state = None
         self._game_var_list = None
@@ -81,10 +101,6 @@ class PlayerEnv(Env):
         while len(self.history) > cnt + 1 and self.history[-(cnt + 1)] == action:
             cnt += 1
         return cnt
-
-    def discrete6_to_button(self, act: int):
-        act = int(act)
-        return VIZDOOM_ACTIONS[act]
 
     def adjust_action(self, action):
         # TODO what does this do?
@@ -125,45 +141,40 @@ class PlayerEnv(Env):
         return action
 
     def reset(self):
-        if not self.cfg.is_multiplayer_game:
-            if self.game is None:
-                self._init_game()
-            self.game.new_episode()
-        else:
-            self._init_game()
-            if self.cfg.num_bots > 0:
-                self._add_bot()
-            self.game.new_episode()
+        self._init_game()
+        if self.cfg.num_bots > 0:
+            self._add_bot()
 
+        self.game.new_episode()
         self._state, obs, _ = self._grab()
+
+        self._record_replay(obs, reset=True)
         self._update_game_vars()
         obs = self._update_frame_stack(obs, reset=True)
 
-        self._record_replay(obs, reset=True)
-
         # apply (frame) transforms
-        if self.transforms is not None:
-            obs = self.transforms(obs)
-
+        if self.transform is not None:
+            obs = self.transform(obs)
         return obs
 
     def step(self, action):
         if isinstance(action, np.ndarray) or isinstance(action, torch.Tensor):
             action = action.tolist()
         if self.discrete6:
-            action = self.discrete6_to_button(action)
+            action = VIZDOOM_ACTIONS[action]
+        # repeat for all ticks
+        action = self.adjust_action(action)
         # vizdoom step
-        rwd = self.game.make_action(self.adjust_action(action), tics=self.frame_skip)
+        rwd = self.game.make_action(action, tics=self.frame_skip)
         self._state, obs, done = self._grab()
+
+        self._record_replay(obs)
         self._update_game_vars()
         obs = self._update_frame_stack(obs)
 
-        self._record_replay(obs)
-
         # apply (frame) transforms
-        if self.transforms is not None:
-            obs = self.transforms(obs)
-
+        if self.transform is not None:
+            obs = self.transform(obs)
         return obs, rwd, done, {}
 
     def close(self):
@@ -175,16 +186,18 @@ class PlayerEnv(Env):
         game = vzd.DoomGame()
         game = player_setup(game, self.cfg)
         game = mp_game_setup(game)
-        if self.cfg.is_multiplayer_game:
-            if self.cfg.host_cfg is not None:
-                game = player_host_setup(game, self.cfg.host_cfg)
-            elif self.cfg.join_cfg is not None:
-                game = player_join_setup(game, self.cfg.join_cfg)
-            else:
-                raise ValueError("neither host nor join, error!")
+        if self.cfg.host_cfg is not None:
+            game = player_host_setup(game, self.cfg.host_cfg)
+        elif self.cfg.join_cfg is not None:
+            game = player_join_setup(game, self.cfg.join_cfg)
+        else:
+            raise ValueError("neither host nor join, error!")
+
         game.set_window_visible(False)  # NOTE: for devices without screen
+
         game.init()
         self.game = game
+
         self._game_var_list = self.game.get_available_game_variables()
         self._update_game_vars()
 
@@ -222,7 +235,8 @@ class PlayerEnv(Env):
 
         # return stacked observation dictionary
         buffers = {k: [frames[k] for frames in self.frame_stack] for k in obs}
-        obs = {k: np.stack(v, axis=0) for k, v in buffers.items()}  # (b, t, h, w)
+        obs = {k: np.stack(v, 1) for k, v in buffers.items()}  # (c, t, h, w)
+        obs = {k: o if o.shape[1] != 1 else o.squeeze(1) for k, o in obs.items()}
         return obs
 
     def _add_bot(self):
@@ -257,7 +271,7 @@ class VizdoomMPEnv(Env):
 
     def __init__(
         self,
-        config_path: str = "multi.cfg",
+        config_path: str = "cig.cfg",
         reward_fn: Optional[Callable] = None,
         num_players: int = 2,
         num_bots: int = 0,
@@ -267,13 +281,13 @@ class VizdoomMPEnv(Env):
         extra_state: Optional[Union[List[ObsBuffer], List[List[ObsBuffer]]]] = None,
         ticrate: int = 35,
         doom_map: str = "map01",
+        crosshair: bool = True,
         respawns: bool = True,
         custom_game_variables: Optional[List[str]] = None,
         player_transform: Optional[Sequence[Callable]] = None,
     ):
-        # limited and full deathmatch
-        # NOTE map02 is large!
-        assert doom_map in ["map01", "map02"]
+        episode_timeout = episode_timeout * 2  # NOTE frame skips
+        # assert doom_map in ["map01", "map02"]
         self.num_players = num_players
         self.num_bots = num_bots
         if not isinstance(n_stack_frames, Sequence):
@@ -291,13 +305,15 @@ class VizdoomMPEnv(Env):
         self.join_cfg = PlayerJoinConfig(self.port)
         # player cfg
         self.players_cfg = []
-        for i in range(self.host_cfg.num_players):
+        # players
+        for i in range(num_players):
             cfg = PlayerConfig()
             cfg.config_path = config_path
             cfg.player_mode = vzd.Mode.PLAYER
             cfg.screen_resolution = vzd.ScreenResolution.RES_256X192
             cfg.screen_format = vzd.ScreenFormat.CBCGCR
             cfg.ticrate = ticrate
+            cfg.crosshair = crosshair
             cfg.respawns = respawns
             cfg.n_stack_frames = n_stack_frames[i]
             cfg.transform = player_transform[i]
@@ -310,13 +326,13 @@ class VizdoomMPEnv(Env):
             if doom_map is not None:
                 cfg.doom_map = doom_map
             cfg.episode_timeout = episode_timeout
-            if i == 0:  # host
+            if i == 0:
                 cfg.host_cfg = self.host_cfg
                 cfg.name = "WhoAmI"
                 cfg.num_bots = num_bots
             else:
                 cfg.join_cfg = self.join_cfg
-                cfg.name = "P{}".format(i)
+                cfg.name = f"P{i}"
             self.players_cfg.append(cfg)
 
         self.envs = []
