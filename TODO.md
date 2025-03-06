@@ -1,7 +1,10 @@
 # TODO
 
+- [ ] Check if it works in colab / prepare a tutorial on how to install it there.
+
 ## Tournament
-- [ ] Create a custom `.wad` / `.cfg` for the tournament (start from cig or multi) - https://doom.fandom.com/wiki/Choosing_a_WAD_editor 
+- [ ] Create a custom `.wad` / `.cfg` for the tournament (start from cig or multi) - https://doom.fandom.com/wiki/Choosing_a_WAD_editor
+    - [ ] Also used to make bots slower
 - [ ] Write env docs and tutorial notebook
 - [ ] Implement tournament script
     - [x] Add custom colors and names for characters
@@ -19,6 +22,9 @@
 - [ ] Provide a few utils from frame / game state preprocessing
 - [ ] Investigate action space (`adjust_action`)
 - [ ] Include game state in observation
+    - [ ] Investigate game variables
+    - [ ] Check HITCOUNT and DAMAGECOUNT
+    - [ ] DEATHCOUNT starts at 1 sometimes
 - [ ] Fix map changing when bots are added (`cig` instead of `multi`)
     - [ ] Check the `cig` maps (map03 seems ok)
 - [ ] ~~Move transforms outside (apply on batch)~~
@@ -26,7 +32,6 @@
 ## Misc
 - [ ] Investigate original vizdoom reward
 - [ ] Basic reward / train DQN
-- [ ] Check if game variables are updated (HITCOUNT)
 - [x] Are there heals / armor / weapons / power ups? Only map02
 - [ ] ~~Feature extraction network / provide prettained weights~~
 - [ ] (optional) Workaround for clearning console prints when multiplayer?

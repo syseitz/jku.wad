@@ -9,7 +9,8 @@ from doom_arena.player import player_setup
 
 CHANNELS = {
     vzd.ScreenFormat.CBCGCR: 3,
-    vzd.ScreenFormat.GRAY8: 3,
+    vzd.ScreenFormat.CRCGCB: 3,
+    vzd.ScreenFormat.GRAY8: 1,
 }
 
 

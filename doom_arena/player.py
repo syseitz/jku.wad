@@ -1,5 +1,6 @@
 import enum
 import vizdoom as vzd
+import os
 
 
 class PlayerHostConfig(object):
@@ -29,6 +30,7 @@ class PlayerConfig(object):
         self.name = None
         self.colorset = None
         self.crosshair = None
+        self.hud = "full"
         # observation settings
         self.transform = None
         self.use_depth = False
@@ -54,6 +56,7 @@ class PlayerConfig(object):
             vzd.GameVariable.POSITION_Y,
         ]
         # game buttons
+        # NOTE: order is impotant
         self.available_buttons = [
             vzd.Button.MOVE_FORWARD,
             vzd.Button.ATTACK,
@@ -61,6 +64,7 @@ class PlayerConfig(object):
             vzd.Button.MOVE_RIGHT,
             vzd.Button.TURN_LEFT,
             vzd.Button.TURN_RIGHT,
+            # vzd.Button.JUMP,
             # vzd.Button.USE,
             # vzd.Button.MOVE_BACKWARD,
         ]
@@ -136,6 +140,13 @@ def player_setup(game, player_config: PlayerConfig):
     if player_config.available_buttons is not None:
         game.set_available_buttons(player_config.available_buttons)
 
+    # hud
+    if player_config.hud != "full":
+        if player_config.hud == "minimal":
+            game.set_render_minimal_hud(True)
+        if player_config.hud in [None, "none"]:
+            game.set_render_hud(False)
+
     # depth
     if player_config.use_depth:
         game.set_depth_buffer_enabled(True)
@@ -177,6 +188,8 @@ def mp_game_setup(game):
     # no monsters
     game.add_game_args("+sv_nomonsters 1")
     game.add_game_args("+nomonsters 1")
+    # easy bots
+    game.add_game_args(f"+viz_bots_path {os.getcwd()}/doom_arena/easy_bots.cfg")
     return game
 
 

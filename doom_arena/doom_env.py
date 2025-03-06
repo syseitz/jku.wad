@@ -55,9 +55,9 @@ VIZDOOM_ACTIONS = [
 class PlayerEnv(Env):
     """ViZDoom per player environment."""
 
-    def __init__(self, cfg: PlayerConfig, discrete6: bool = True, frame_skip: int = 2):
+    def __init__(self, cfg: PlayerConfig, discrete7: bool = True, frame_skip: int = 1):
         self.cfg = cfg
-        self.discrete6 = discrete6
+        self.discrete7 = discrete7
         self.transform = cfg.transform
         self.record = False
         self.replay = None
@@ -80,9 +80,9 @@ class PlayerEnv(Env):
         )
 
         self._buttons = get_doom_buttons(cfg)
-        if discrete6:
+        if discrete7:
             # simplified
-            self.action_space = Discrete(len(self._buttons))
+            self.action_space = Discrete(len(self._buttons) + 1)  # NOTE: +1 for noop
         else:
             # TODO what does this do?
             # actual button space
@@ -149,7 +149,7 @@ class PlayerEnv(Env):
         self._state, obs, _ = self._grab()
 
         self._record_replay(obs, reset=True)
-        self._update_game_vars()
+        self._update_game_vars(reset=True)
         obs = self._update_frame_stack(obs, reset=True)
 
         # apply (frame) transforms
@@ -160,10 +160,17 @@ class PlayerEnv(Env):
     def step(self, action):
         if isinstance(action, np.ndarray) or isinstance(action, torch.Tensor):
             action = action.tolist()
-        if self.discrete6:
-            action = VIZDOOM_ACTIONS[action]
-        # repeat for all ticks
-        action = self.adjust_action(action)
+        if self.discrete7:
+            # action = VIZDOOM_ACTIONS[action]
+            # onehot
+            if action == 0:
+                # noop
+                action = [0] * self.action_space.n
+            else:
+                action = [
+                    1 if (i + 1) == action else 0 for i in range(self.action_space.n)
+                ]
+        # action = self.adjust_action(action)
         # vizdoom step
         rwd = self.game.make_action(action, tics=self.frame_skip)
         self._state, obs, done = self._grab()
@@ -199,7 +206,7 @@ class PlayerEnv(Env):
         self.game = game
 
         self._game_var_list = self.game.get_available_game_variables()
-        self._update_game_vars()
+        self._update_game_vars(reset=True)
 
     def _grab(self):
         state = self.game.get_state()
@@ -244,7 +251,7 @@ class PlayerEnv(Env):
         for i in range(self.cfg.num_bots):
             self.game.send_game_command("addbot")
 
-    def _update_game_vars(self):
+    def _update_game_vars(self, reset: bool = False):
         self._game_vars_pre = deepcopy(self._game_vars)
         if self.unwrapped._state is not None:  # ensure current frame is available
             for key in self._game_var_list:
@@ -263,6 +270,9 @@ class PlayerEnv(Env):
         if self.record:
             self.replay["tic"].append(self.game.get_episode_time())
             self.replay["frames"].append(obs["screen"])
+            for k in ["labels", "depth", "automap"]:
+                if k in obs:
+                    self.replay[k].append(obs[k])
             self.replay["game_vars"].append(copy.deepcopy(self._game_vars))
 
 
@@ -275,18 +285,20 @@ class VizdoomMPEnv(Env):
         reward_fn: Optional[Callable] = None,
         num_players: int = 2,
         num_bots: int = 0,
-        discrete6: bool = True,
+        discrete7: bool = True,
         episode_timeout: int = 2000,
         n_stack_frames: Union[int, List[int]] = 1,
         extra_state: Optional[Union[List[ObsBuffer], List[List[ObsBuffer]]]] = None,
         ticrate: int = 35,
-        doom_map: str = "map01",
+        frame_skip: int = 1,
+        doom_map: str = "map03",
         crosshair: bool = True,
+        hud: str = "full",
         respawns: bool = True,
         custom_game_variables: Optional[List[str]] = None,
         player_transform: Optional[Sequence[Callable]] = None,
     ):
-        episode_timeout = episode_timeout * 2  # NOTE frame skips
+        episode_timeout = episode_timeout * frame_skip  # NOTE frame skips
         # assert doom_map in ["map01", "map02"]
         self.num_players = num_players
         self.num_bots = num_bots
@@ -311,10 +323,11 @@ class VizdoomMPEnv(Env):
             cfg.config_path = config_path
             cfg.player_mode = vzd.Mode.PLAYER
             cfg.screen_resolution = vzd.ScreenResolution.RES_256X192
-            cfg.screen_format = vzd.ScreenFormat.CBCGCR
+            cfg.screen_format = vzd.ScreenFormat.CRCGCB
             cfg.ticrate = ticrate
             cfg.crosshair = crosshair
             cfg.respawns = respawns
+            cfg.hud = hud
             cfg.n_stack_frames = n_stack_frames[i]
             cfg.transform = player_transform[i]
             if extra_state is not None:
@@ -337,7 +350,7 @@ class VizdoomMPEnv(Env):
 
         self.envs = []
         for i, cfg in enumerate(self.players_cfg):
-            e = PlayerEnv(cfg, discrete6=discrete6)
+            e = PlayerEnv(cfg, discrete7=discrete7, frame_skip=frame_skip)
             self.envs.append(e)
 
         if len(self.envs) == 1:
@@ -365,8 +378,8 @@ class VizdoomMPEnv(Env):
         for player_idx in range(self.num_players):
             rwd_p = self.reward_fn(
                 vizdoom_rwds[player_idx],
-                self.envs[player_idx].unwrapped._game_vars_pre,
                 self.envs[player_idx].unwrapped._game_vars,
+                self.envs[player_idx].unwrapped._game_vars_pre,
                 player_idx,
             )
             rwds.append(rwd_p)

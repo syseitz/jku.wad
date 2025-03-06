@@ -71,7 +71,7 @@ def render_episode(player_replays, subsample: int = 1, replay_path: str = None):
         fig,
         update,
         frames=min([f.shape[0] for f in vid_frames.values()]),
-        interval=1000 // 30 * subsample,
+        interval=1000 // 35 * subsample,
         blit=True,
     )
 
