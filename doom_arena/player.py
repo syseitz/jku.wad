@@ -64,7 +64,7 @@ class PlayerConfig(object):
             vzd.Button.MOVE_RIGHT,
             vzd.Button.TURN_LEFT,
             vzd.Button.TURN_RIGHT,
-            # vzd.Button.JUMP,
+            vzd.Button.JUMP,
             # vzd.Button.USE,
             # vzd.Button.MOVE_BACKWARD,
         ]
@@ -72,6 +72,7 @@ class PlayerConfig(object):
         # game map
         self.doom_map = None
         self.doom_skill = 1
+        self.bot_skill = 0
 
         self.n_stack_frames = 1
         self.num_bots = 0
@@ -147,6 +148,9 @@ def player_setup(game, player_config: PlayerConfig):
         if player_config.hud in [None, "none"]:
             game.set_render_hud(False)
 
+    game.set_render_decals(False)
+    game.set_render_messages(False)
+
     # depth
     if player_config.use_depth:
         game.set_depth_buffer_enabled(True)
@@ -180,7 +184,7 @@ def player_setup(game, player_config: PlayerConfig):
     return game
 
 
-def mp_game_setup(game):
+def mp_game_setup(game, bot_skill: int = 0):
     # respawn items
     game.add_game_args("+altdeath 1")
     # no crouching
@@ -188,8 +192,14 @@ def mp_game_setup(game):
     # no monsters
     game.add_game_args("+sv_nomonsters 1")
     game.add_game_args("+nomonsters 1")
-    # easy bots
-    game.add_game_args(f"+viz_bots_path {os.getcwd()}/doom_arena/easy_bots.cfg")
+    if bot_skill == 0:
+        # easy bots
+        game.add_game_args(f"+viz_bots_path {os.getcwd()}/doom_arena/bots/easy.cfg")
+    if bot_skill == 1:
+        pass
+    if bot_skill >= 2:
+        # hard bots
+        game.add_game_args(f"+viz_bots_path {os.getcwd()}/doom_arena/bots/hard.cfg")
     return game
 
 

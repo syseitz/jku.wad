@@ -13,6 +13,7 @@ from portpicker import pick_unused_port
 import numpy as np
 import torch
 from collections import defaultdict
+from warnings import warn
 import copy
 
 import vizdoom as vzd
@@ -192,7 +193,7 @@ class PlayerEnv(Env):
         self.close()
         game = vzd.DoomGame()
         game = player_setup(game, self.cfg)
-        game = mp_game_setup(game)
+        game = mp_game_setup(game, self.cfg.bot_skill)
         if self.cfg.host_cfg is not None:
             game = player_host_setup(game, self.cfg.host_cfg)
         elif self.cfg.join_cfg is not None:
@@ -281,17 +282,18 @@ class VizdoomMPEnv(Env):
 
     def __init__(
         self,
-        config_path: str = "cig.cfg",
+        config_path: str = "doom_arena/scenarios/jku.cfg",
         reward_fn: Optional[Callable] = None,
         num_players: int = 2,
         num_bots: int = 0,
+        bot_skill: int = 0,
         discrete7: bool = True,
-        episode_timeout: int = 2000,
+        episode_timeout: int = 10050,
         n_stack_frames: Union[int, List[int]] = 1,
         extra_state: Optional[Union[List[ObsBuffer], List[List[ObsBuffer]]]] = None,
         ticrate: int = 35,
         frame_skip: int = 1,
-        doom_map: str = "map03",
+        doom_map: str = "ROOM",
         crosshair: bool = True,
         hud: str = "full",
         respawns: bool = True,
@@ -299,7 +301,12 @@ class VizdoomMPEnv(Env):
         player_transform: Optional[Sequence[Callable]] = None,
     ):
         episode_timeout = episode_timeout * frame_skip  # NOTE frame skips
-        # assert doom_map in ["map01", "map02"]
+        if config_path == "doom_arena/scenarios/jku.cfg":
+            assert doom_map in ["TRNM", "TRNMBIG" "ROOM"]
+            if doom_map == "ROOM":
+                num_bots = min(num_bots, 4)
+        else:
+            warn(f"Using custom untested configuration : {config_path}.")
         self.num_players = num_players
         self.num_bots = num_bots
         if not isinstance(n_stack_frames, Sequence):
@@ -330,6 +337,7 @@ class VizdoomMPEnv(Env):
             cfg.hud = hud
             cfg.n_stack_frames = n_stack_frames[i]
             cfg.transform = player_transform[i]
+            cfg.bot_skill = bot_skill
             if extra_state is not None:
                 cfg.use_labels = ObsBuffer.LABELS in extra_state[i]
                 cfg.use_depth = ObsBuffer.DEPTH in extra_state[i]
