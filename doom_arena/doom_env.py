@@ -302,7 +302,7 @@ class VizdoomMPEnv(Env):
     ):
         episode_timeout = episode_timeout * frame_skip  # NOTE frame skips
         if config_path == "doom_arena/scenarios/jku.cfg":
-            assert doom_map in ["TRNM", "TRNMBIG" "ROOM"]
+            assert doom_map in ["TRNM", "TRNMBIG", "ROOM"]
             if doom_map == "ROOM":
                 num_bots = min(num_bots, 4)
         else:
