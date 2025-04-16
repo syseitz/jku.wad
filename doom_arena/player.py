@@ -21,7 +21,6 @@ class PlayerConfig(object):
     def __init__(self):
         self.config_path = None
         self.player_mode = None
-        self.is_render_hud = None
         self.screen_resolution = None
         self.screen_format = None
         self.ticrate = None
@@ -145,7 +144,7 @@ def player_setup(game, player_config: PlayerConfig):
     if player_config.hud != "full":
         if player_config.hud == "minimal":
             game.set_render_minimal_hud(True)
-        if player_config.hud in [None, "none"]:
+        if player_config.hud in [False, None, "none"]:
             game.set_render_hud(False)
 
     game.set_render_decals(False)
