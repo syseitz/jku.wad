@@ -278,29 +278,74 @@ class PlayerEnv(Env):
 
 
 class VizdoomMPEnv(Env):
-    """ViZDoom multi-player environment."""
+    """
+    Custom VizDoom multiplayer environment for the jku.wad DLR 25 final challenge.
+
+    Parameters:
+    - config_path (default: "doom_arena/scenarios/jku.cfg"):
+    Path to the VizDoom configuration file. **Do not change** for the challenge.
+
+    - reward_fn (default: None):
+    Callable used to compute rewards. To define custom rewards, extend the `__call__`
+    method in `doom_arena.reward.VizDoomReward`.
+
+    - num_players (default: 1):
+    Number of external agent players. Players connect via sockets and share the same
+    game instance, with player one acting as host.
+
+    - num_bots (default: 0):
+    Number of NPC enemies in the environment.
+
+    - bot_skill (default: 0):
+    Skill level for bots, ranging from 0 to 3 (where 3 represents perfect bots).
+
+    - discrete7 (default: True):
+    Enables a simplified action space with only 7 discrete buttons.
+
+    - episode_timeout (default: 10050):
+    Maximum number of frames before the episode is terminated.
+
+    - n_stack_frames (default: 1):
+    Number of frames to include in the stacked observation buffer.
+
+    - extra_state (default: None):
+    Additional sensor observations. Can be one of the following:
+        - `ObsBuffer.LABELS`: first-person view with enemies and pickups highlighted.
+        - `ObsBuffer.DEPTH`: first-person depth map.
+        - `ObsBuffer.AUTOMAP`: top-down view using Doom's automap.
+
+    - doom_map (default: "ROOM"):
+    Map to load in the environment. Options:
+        - `TRNM`: Medium-sized map used for PvP tournaments.
+        - `TRNMBIG`: Large map with multiple interconnected rooms.
+        - `ROOM`: Small map for evaluation and grading; supports up to 4 bots.
+
+    - crosshair (default: True):
+    Enables the red aiming crosshair.
+
+    - hud (default: "full"):
+    Heads-up display level. Options are `"full"`, `"minimal"`, or `"off"` (or `None`).
+
+    - player_transform (default: None):
+    Optional callable that preprocesses the game state before it is returned.
+    """
 
     def __init__(
         self,
         config_path: str = "doom_arena/scenarios/jku.cfg",
         reward_fn: Optional[Callable] = None,
-        num_players: int = 2,
+        num_players: int = 1,
         num_bots: int = 0,
         bot_skill: int = 0,
         discrete7: bool = True,
         episode_timeout: int = 10050,
         n_stack_frames: Union[int, List[int]] = 1,
         extra_state: Optional[Union[List[ObsBuffer], List[List[ObsBuffer]]]] = None,
-        ticrate: int = 35,
-        frame_skip: int = 1,
         doom_map: str = "ROOM",
-        crosshair: bool = True,
-        hud: str = "full",
-        respawns: bool = True,
-        custom_game_variables: Optional[List[str]] = None,
+        crosshair: Sequence[bool] = True,
+        hud: Sequence[str] = "full",
         player_transform: Optional[Sequence[Callable]] = None,
     ):
-        episode_timeout = episode_timeout * frame_skip  # NOTE frame skips
         if config_path == "doom_arena/scenarios/jku.cfg":
             assert doom_map in ["TRNM", "TRNMBIG", "ROOM"]
             if doom_map == "ROOM":
@@ -313,8 +358,14 @@ class VizdoomMPEnv(Env):
             n_stack_frames = [n_stack_frames] * num_players
         if not isinstance(player_transform, Sequence):
             player_transform = [player_transform] * num_players
+        if len(extra_state) == 0:
+            extra_state = None
         if extra_state is not None and not isinstance(extra_state[0], Sequence):
             extra_state = [extra_state] * num_players
+        if not isinstance(crosshair, Sequence):
+            crosshair = [crosshair] * num_players
+        if not isinstance(hud, Sequence):
+            hud = [hud] * num_players
         # select empty port for multiplayer
         self.port = pick_unused_port()
         # host cfg
@@ -331,10 +382,10 @@ class VizdoomMPEnv(Env):
             cfg.player_mode = vzd.Mode.PLAYER
             cfg.screen_resolution = vzd.ScreenResolution.RES_256X192
             cfg.screen_format = vzd.ScreenFormat.CRCGCB
-            cfg.ticrate = ticrate
-            cfg.crosshair = crosshair
-            cfg.respawns = respawns
-            cfg.hud = hud
+            cfg.ticrate = 35
+            cfg.crosshair = crosshair[i]
+            cfg.respawns = True
+            cfg.hud = hud[i]
             cfg.n_stack_frames = n_stack_frames[i]
             cfg.transform = player_transform[i]
             cfg.bot_skill = bot_skill
@@ -342,8 +393,6 @@ class VizdoomMPEnv(Env):
                 cfg.use_labels = ObsBuffer.LABELS in extra_state[i]
                 cfg.use_depth = ObsBuffer.DEPTH in extra_state[i]
                 cfg.use_automap = ObsBuffer.AUTOMAP in extra_state[i]
-            if custom_game_variables is not None:
-                cfg.available_game_variables = custom_game_variables
             if doom_map is not None:
                 cfg.doom_map = doom_map
             cfg.episode_timeout = episode_timeout
@@ -358,7 +407,7 @@ class VizdoomMPEnv(Env):
 
         self.envs = []
         for i, cfg in enumerate(self.players_cfg):
-            e = PlayerEnv(cfg, discrete7=discrete7, frame_skip=frame_skip)
+            e = PlayerEnv(cfg, discrete7=discrete7)
             self.envs.append(e)
 
         if len(self.envs) == 1:

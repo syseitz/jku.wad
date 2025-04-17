@@ -38,7 +38,7 @@ if __name__ == "__main__":
         extra_state=[ObsBuffer.LABELS, ObsBuffer.DEPTH],
         episode_timeout=120 * 35,
         n_stack_frames=N_STACK_FRAMES,
-        player_transform=[frame_transform]
+        player_transform=[frame_transform],
     )
 
     dqn = DQN(
