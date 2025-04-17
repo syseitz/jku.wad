@@ -5,7 +5,7 @@ from matplotlib import animation
 
 def render_episode(player_replays, subsample: int = 1, replay_path: str = None):
     num_players = len(player_replays)
-    cols = min(num_players, 3)
+    cols = min(num_players, 2)
     rows = (num_players + cols - 1) // cols
 
     fig, axs = plt.subplots(rows, cols, figsize=(6 * cols, 6 * rows), layout="tight")
@@ -30,13 +30,18 @@ def render_episode(player_replays, subsample: int = 1, replay_path: str = None):
                 v.get("DEATHCOUNT", 0) for v in replay["game_vars"][::subsample]
             ],
         }
+    start_health = {pid: player_stats[pid]["health"][0] for pid in player_replays}
+    start_frags = {pid: player_stats[pid]["frags"][0] for pid in player_replays}
+    start_deaths = {pid: player_stats[pid]["deaths"][0] for pid in player_replays}
     imagexn = {pid: np.transpose(vid_frames[pid][0], (1, 2, 0)) for pid in vid_frames}
     plotxn = {}
     for i, (pid, img) in enumerate(imagexn.items()):
         ax = axs[i]
         plotxn[pid] = ax.imshow(img)
         ax.axis("off")
-        ax.set_title(f"Player {pid}")
+        ax.set_title(
+            pid, font="console", fontfamily="monospace", weight="bold", fontsize=20
+        )
         # Add textbox for stats
         stats_text = (
             f"\u2661: {player_stats[pid]['health'][0]}\n"
@@ -49,6 +54,7 @@ def render_episode(player_replays, subsample: int = 1, replay_path: str = None):
             stats_text,
             transform=ax.transAxes,
             fontsize=12,
+            fontfamily="monospace",
             verticalalignment="top",
             bbox=dict(boxstyle="round", facecolor="white", alpha=0.5),
         )
@@ -59,9 +65,9 @@ def render_episode(player_replays, subsample: int = 1, replay_path: str = None):
             plotxn[pid].set_array(frame_image)
             # Update stats text
             stats_text = (
-                f"\u2661: {player_stats[pid]['health'][frame]}\n"
-                f"\u26A1: {player_stats[pid]['frags'][frame]}\n"
-                f"\u2620: {player_stats[pid]['deaths'][frame]}"
+                f"\u2661: {player_stats[pid]['health'][frame] - start_health[pid]}\n"
+                f"\u26A1: {player_stats[pid]['frags'][frame] - start_frags[pid]}\n"
+                f"\u2620: {player_stats[pid]['deaths'][frame] - start_deaths[pid]}"
             )
             axs[list(player_replays.keys()).index(pid)].texts[0].set_text(stats_text)
         return list(plotxn.values())

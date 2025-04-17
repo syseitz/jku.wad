@@ -457,10 +457,12 @@ class VizdoomMPEnv(Env):
         return self.obs
 
     def enable_replay(self):
+        print("Enabling replays!")
         for e in self.envs:
             e.record = True
 
     def disable_replay(self):
+        print("Disabling replays!")
         for e in self.envs:
             e.record = False
 
