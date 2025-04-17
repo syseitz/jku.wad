@@ -358,7 +358,7 @@ class VizdoomMPEnv(Env):
             n_stack_frames = [n_stack_frames] * num_players
         if not isinstance(player_transform, Sequence):
             player_transform = [player_transform] * num_players
-        if len(extra_state) == 0:
+        if extra_state is not None and len(extra_state) == 0:
             extra_state = None
         if extra_state is not None and not isinstance(extra_state[0], Sequence):
             extra_state = [extra_state] * num_players
