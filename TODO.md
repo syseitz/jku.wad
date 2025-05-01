@@ -2,7 +2,7 @@
 
 ## Tutors
 - [ ] Check if it works in colab
-- [ ] Requirements and environment
+- [x] Requirements and environment(to be tested)
 - [ ] Exercise notebook for students (basic training / model)
 - [ ] Model saving/loading from ONNX (check [tournament.ipynb](/tournament.ipynb))
     - [ ] User config in yaml format

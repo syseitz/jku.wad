@@ -15,10 +15,20 @@ It is set up as a deathmatch, and can be played as a single agent against bots, 
 - __Observations:__ `192x256` RGB game frames
 
 ## Setup
+
+### Using pip
 ```bash
 git clone https://github.com/gerkone/jku.wad
 cd jku.wad
 pip install -r requirements.txt
+```
+
+### Using conda/mamba
+```bash
+git clone https://github.com/gerkone/jku.wad
+cd jku.wad
+conda env create -f environment.yaml  # or mamba env create -f environment.yaml
+conda activate jku_wad
 ```
 
 

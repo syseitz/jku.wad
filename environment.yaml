@@ -1,0 +1,23 @@
+name: jku_wad
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pytorch
+  - torchvision
+  - numpy
+  - matplotlib
+  - jupyter
+  - ipykernel
+  - pip
+  - pip:
+    - vizdoom
+    - portpicker
+    - gym
+    - gymnasium
+    - einops
+    - pyyaml
+    - cloudpickle
+    - farama-notifications 
