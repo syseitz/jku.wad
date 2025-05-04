@@ -364,7 +364,7 @@ class VizdoomMPEnv(Env):
             extra_state = [extra_state] * num_players
         if not isinstance(crosshair, Sequence):
             crosshair = [crosshair] * num_players
-        if not isinstance(hud, Sequence):
+        if not isinstance(hud, List):
             hud = [hud] * num_players
         # select empty port for multiplayer
         self.port = pick_unused_port()
@@ -390,9 +390,10 @@ class VizdoomMPEnv(Env):
             cfg.transform = player_transform[i]
             cfg.bot_skill = bot_skill
             if extra_state is not None:
-                cfg.use_labels = ObsBuffer.LABELS in extra_state[i]
-                cfg.use_depth = ObsBuffer.DEPTH in extra_state[i]
-                cfg.use_automap = ObsBuffer.AUTOMAP in extra_state[i]
+                extras = [v.value for v in extra_state[i]]
+                cfg.use_labels = ObsBuffer.LABELS.value in extras
+                cfg.use_depth = ObsBuffer.DEPTH in extras
+                cfg.use_automap = ObsBuffer.AUTOMAP in extras
             if doom_map is not None:
                 cfg.doom_map = doom_map
             cfg.episode_timeout = episode_timeout
