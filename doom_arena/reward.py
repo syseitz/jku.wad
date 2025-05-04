@@ -20,27 +20,20 @@ class VizDoomReward:
         player_id: int,
     ) -> Tuple:
         self._step += 1
-        _ = game_var, game_var_old, player_id
-        rwd_hit = 5.0 * (game_var["HITCOUNT"] - game_var_old["HITCOUNT"])
-        rwd_hit = -1.0 * (game_var["HITS_TAKEN"] - game_var_old["HITS_TAKEN"])
+        _ = player_id
+        rwd_hit = 2.0 * (game_var["HITCOUNT"] - game_var_old["HITCOUNT"])
+        rwd_hit_taken = -0.1 * (game_var["HITS_TAKEN"] - game_var_old["HITS_TAKEN"])
         rwd_frag = 100.0 * (game_var["FRAGCOUNT"] - game_var_old["FRAGCOUNT"])
-        rwd_health = game_var["HEALTH"] - game_var_old["HEALTH"]
+        rwd_health = (game_var["HEALTH"] - game_var_old["HEALTH"])
         rwd_dead = -10.0 if (game_var["DEAD"] - game_var_old["DEAD"]) > 0 else 0.0
-        # picked up weapon
-        rwd_pickup = 0.0
-        if game_var["SELECTED_WEAPON"] != game_var_old["SELECTED_WEAPON"]:
-            rwd_pickup = 1.0 if game_var["SELECTED_WEAPON"] not in [1, 2] else 0.0
-        # using fists
-        rwd_out_of_ammo = -0.1 if game_var["SELECTED_WEAPON"] == 1 else 0.0
 
         return (
-            vizdoom_reward,
+            # vizdoom_reward,
             rwd_hit,
+            rwd_hit_taken,
             rwd_frag,
             rwd_health,
             rwd_dead,
-            rwd_pickup,
-            rwd_out_of_ammo,
         )
 
     def outcome(self):
