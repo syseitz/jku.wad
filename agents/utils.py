@@ -23,10 +23,11 @@ def resize(x: torch.Tensor):
 
 
 def minmax(x: torch.Tensor):
-    # channelwise minmax (preserves different buffers as well)
-    # x_max = x.view(x.shape[0], x.shape[1], -1).max(-1)[0][..., *[None] * (x.ndim - 2)]
-    # x = x / (x_max + 1e-8)
-    x = x / 255
+    # rgb
+    x[:3] = x[:3] / 255
+    if x.shape[0] > 3:
+        for c in range(3, x.shape[0]):
+            x[c] = x[c] / (x[c].max() + 1e-8)
     return torch.nan_to_num(x)
 
 

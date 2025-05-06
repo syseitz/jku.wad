@@ -392,8 +392,8 @@ class VizdoomMPEnv(Env):
             if extra_state is not None:
                 extras = [v.value for v in extra_state[i]]
                 cfg.use_labels = ObsBuffer.LABELS.value in extras
-                cfg.use_depth = ObsBuffer.DEPTH in extras
-                cfg.use_automap = ObsBuffer.AUTOMAP in extras
+                cfg.use_depth = ObsBuffer.DEPTH.value in extras
+                cfg.use_automap = ObsBuffer.AUTOMAP.value in extras
             if doom_map is not None:
                 cfg.doom_map = doom_map
             cfg.episode_timeout = episode_timeout
