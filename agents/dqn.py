@@ -1,7 +1,8 @@
+from typing import Dict
+
 import random
 import torch
 from torch import nn
-import torch.nn.functional as F
 from einops import rearrange
 from gym import Env
 
@@ -20,28 +21,24 @@ class DQN(nn.Module):
             self.embed = nn.Conv3d(input_dim, dim, kernel_size=1)
 
         self.resnet = nn.Sequential(
-            ResidualBlock(space, dim=dim, kernel_size=3, padding="same"),
+            ResidualBlock(space, dim=dim, kernel_size=3, padding=1),
+            Downsample(space, dim=dim, downsample=4),
+            ResidualBlock(space, dim=dim, kernel_size=3, padding=1),
+            Downsample(space, dim=dim, downsample=4),
+            ResidualBlock(space, dim=dim, kernel_size=3, padding=1),
             Downsample(space, dim=dim),
-            ResidualBlock(space, dim=dim, kernel_size=3, padding="same"),
-            Downsample(space, dim=dim),
-            ResidualBlock(space, dim=dim, kernel_size=3, padding="same"),
-            Downsample(space, dim=dim),
-            ResidualBlock(space, dim=dim, kernel_size=3, padding="same"),
-            Downsample(space, dim=dim),
-            ResidualBlock(space, dim=dim, kernel_size=3, padding="same"),
-            Downsample(space, dim=dim),
-            ResidualBlock(space, dim=dim, kernel_size=3, padding="same"),
+            ResidualBlock(space, dim=dim, kernel_size=3, padding=1),
         )
 
         self.mlp = nn.Sequential(
-            nn.Linear(dim, 512), nn.SiLU(), nn.Linear(512, action_space)
+            nn.Linear(4**2 * dim, 512), nn.SiLU(), nn.Linear(512, action_space)
         )
 
-    def forward(self, x):
-        x = self.embed(x)
+    def forward(self, frames: torch.Tensor):
+        x = self.embed(frames)
         x = self.resnet(x)
         # meanpool
-        x = rearrange(x, "b c ... -> b c (...)").mean(-1)
+        x = rearrange(x, "b c ... -> b (c ...)")
         x = self.mlp(x)
         return x
 

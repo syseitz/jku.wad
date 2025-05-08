@@ -1,34 +1,9 @@
+from typing import Dict, List
+
 import torch.nn as nn
 import torch
-import numpy as np
 import torch.nn.functional as F
 from collections import OrderedDict
-
-
-def stack_dict(x):
-    return np.concat(list(x.values()), 0)
-
-
-def to_tensor(x):
-    if isinstance(x, np.ndarray):
-        x = torch.from_numpy(x)
-    return x
-
-
-def resize(x: torch.Tensor):
-    if x.ndim < 4:
-        x = x.unsqueeze(0)
-    x = F.interpolate(x, (128, 128))
-    return x.squeeze(0)
-
-
-def minmax(x: torch.Tensor):
-    # rgb
-    x[:3] = x[:3] / 255
-    if x.shape[0] > 3:
-        for c in range(3, x.shape[0]):
-            x[c] = x[c] / (x[c].max() + 1e-8)
-    return torch.nan_to_num(x)
 
 
 class Downsample(nn.Module):
@@ -90,3 +65,13 @@ def update_ema(ema_model, model, decay: float = 0.995):
 
     for name, param in model_params.items():
         ema_params[name].mul_(decay).add_(param.data, alpha=1 - decay)
+
+
+def batch_tree(x: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+    batched = {}
+    keys = x[0].keys()
+
+    for key in keys:
+        batched[key] = torch.stack([d[key] for d in x], dim=0)
+
+    return batched

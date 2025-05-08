@@ -5,6 +5,8 @@ from matplotlib import animation
 
 def render_episode(player_replays, subsample: int = 1, replay_path: str = None):
     num_players = len(player_replays)
+    if num_players == 0:
+        raise ValueError("No replay found!")
     cols = min(num_players, 2)
     rows = (num_players + cols - 1) // cols
 

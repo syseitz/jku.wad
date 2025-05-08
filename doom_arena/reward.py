@@ -35,37 +35,3 @@ class VizDoomReward:
             # rwd_health,
             # rwd_dead,
         )
-
-    def outcome(self):
-        # TODO check this out
-        leaderboard = []
-        for player_id in range(self.num_players):
-            leaderboard = np.append(leaderboard, [self.cumulated_frag[player_id]])
-        leaderboard_index = np.argsort(-leaderboard)
-
-        outcome = np.zeros(self.num_players)
-        if self.num_players == 1:
-            # single player
-            return outcome
-        elif self.num_players == 2:
-            # duel
-            ind_win = ind_lose = 1
-            if self.cumulated_frag[0] == self.cumulated_frag[1]:
-                # tie
-                return outcome
-        else:
-            # multiplayer
-            ind_win = int(float(self.num_players) * (1 / 3.0))
-            ind_lose = int(float(self.num_players) * (2 / 3.0))
-
-        for player_id in range(self.num_players):
-            if player_id < ind_win:
-                # ranked top, deemed as win
-                outcome[leaderboard_index[player_id]] = 1
-            elif ind_win <= player_id < ind_lose:
-                # ranked middle, deemed as tie
-                outcome[leaderboard_index[player_id]] = 0
-            else:  # ind_lose <= 1
-                # ranked bottom, deemed as lose
-                outcome[leaderboard_index[player_id]] = -1
-        return outcome

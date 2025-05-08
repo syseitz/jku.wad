@@ -1,7 +1,11 @@
+from typing import Dict
 import os
 import sys
 import re
+import numpy as np
 import vizdoom as vzd
+import torch
+import torch.nn.functional as F
 from contextlib import contextmanager
 
 from doom_arena.player import player_setup
@@ -44,3 +48,41 @@ def suppress_stdout(verbose):
                 sys.stdout = old_stdout
     else:
         yield
+
+
+def to_tensor(raw: Dict[str, np.ndarray]):
+    def _to_tensor(x):
+        if isinstance(x, np.ndarray):
+            x = torch.from_numpy(x)
+        return x
+
+    return {k: _to_tensor(v) for k, v in raw.items()}
+
+
+def resize(raw: Dict[str, torch.Tensor]):
+    def _resize(x):
+        if x.ndim < 4:
+            x = x.unsqueeze(0)
+        x = F.interpolate(x, (128, 128))
+        return x.squeeze(0)
+
+    return {k: _resize(v) for k, v in raw.items()}
+
+
+def minmax(raw: Dict[str, torch.Tensor]):
+    def _minmax(x, key):
+        if key == "screen":
+            # rgb
+            x = x / 255
+        else:
+            # other
+            x = x / (x.max() + 1e-8)
+        return torch.nan_to_num(x)
+
+    return {k: _minmax(v, k) for k, v in raw.items()}
+
+
+def cat_dict(raw: Dict[str, torch.Tensor]):
+    # concat along channels
+    buffers = ["screen", "labels", "depth", "automap"]
+    return torch.cat([raw[k] for k in buffers if k in raw], 0)

@@ -18,10 +18,18 @@ import copy
 
 import vizdoom as vzd
 from gym import Env
+from torchvision import transforms
 from gym.spaces import Box, MultiDiscrete, Discrete
 
 from doom_arena.parallel import ParallelEnv
-from doom_arena.utils import get_doom_buttons, get_screen_shape
+from doom_arena.utils import (
+    get_doom_buttons,
+    get_screen_shape,
+    to_tensor,
+    resize,
+    minmax,
+    cat_dict,
+)
 from doom_arena.reward import VizDoomReward
 from doom_arena.player import (
     ObsBuffer,
@@ -56,7 +64,13 @@ VIZDOOM_ACTIONS = [
 class PlayerEnv(Env):
     """ViZDoom per player environment."""
 
-    def __init__(self, cfg: PlayerConfig, discrete7: bool = True, frame_skip: int = 1):
+    def __init__(
+        self,
+        cfg: PlayerConfig,
+        discrete7: bool = True,
+        frame_skip: int = 1,
+        seed: int = 1337,
+    ):
         self.cfg = cfg
         self.discrete7 = discrete7
         self.transform = cfg.transform
@@ -64,7 +78,8 @@ class PlayerEnv(Env):
         self.replay = None
         self.is_spectator = cfg.player_mode == vzd.Mode.SPECTATOR
         self.frame_skip = frame_skip
-
+        # self.seed(seed)
+        self.doom_seed = seed
         self.game = None
 
         self.observation_space = Box(
@@ -180,6 +195,23 @@ class PlayerEnv(Env):
         self._update_game_vars()
         obs = self._update_frame_stack(obs)
 
+        if done:
+            # game over, all obs to white
+            game_over_obs = {}
+            for k in obs:
+                shape = get_screen_shape(
+                    self.cfg.screen_format,
+                    self.cfg.screen_resolution,
+                    labels=(k == "labels"),
+                    depth=(k == "depth"),
+                    automap=(k == "automap"),
+                )
+                shape = list(shape)
+                if k != "screen":
+                    shape[0] = shape[0] - 3  # remove rgb
+                game_over_obs[k] = np.ones(shape, dtype=np.uint8) * 255
+            obs = game_over_obs
+
         # apply (frame) transforms
         if self.transform is not None:
             obs = self.transform(obs)
@@ -200,9 +232,8 @@ class PlayerEnv(Env):
             game = player_join_setup(game, self.cfg.join_cfg)
         else:
             raise ValueError("neither host nor join, error!")
-
         game.set_window_visible(False)  # NOTE: for devices without screen
-
+        game.set_seed(self.doom_seed)
         game.init()
         self.game = game
 
@@ -325,9 +356,6 @@ class VizdoomMPEnv(Env):
 
     - hud (default: "full"):
     Heads-up display level. Options are `"full"`, `"minimal"`, or `"off"` (or `None`).
-
-    - player_transform (default: None):
-    Optional callable that preprocesses the game state before it is returned.
     """
 
     def __init__(
@@ -344,7 +372,7 @@ class VizdoomMPEnv(Env):
         doom_map: str = "ROOM",
         crosshair: Sequence[bool] = True,
         hud: Sequence[str] = "full",
-        player_transform: Optional[Sequence[Callable]] = None,
+        seed: int = 1337,
     ):
         if config_path == "doom_arena/scenarios/jku.cfg":
             assert doom_map in ["TRNM", "TRNMBIG", "ROOM"]
@@ -356,8 +384,6 @@ class VizdoomMPEnv(Env):
         self.num_bots = num_bots
         if not isinstance(n_stack_frames, Sequence):
             n_stack_frames = [n_stack_frames] * num_players
-        if not isinstance(player_transform, Sequence):
-            player_transform = [player_transform] * num_players
         if extra_state is not None and len(extra_state) == 0:
             extra_state = None
         if extra_state is not None and not isinstance(extra_state[0], Sequence):
@@ -387,13 +413,14 @@ class VizdoomMPEnv(Env):
             cfg.respawns = True
             cfg.hud = hud[i]
             cfg.n_stack_frames = n_stack_frames[i]
-            cfg.transform = player_transform[i]
+            cfg.transform = transforms.Compose([to_tensor, resize, minmax, cat_dict])
             cfg.bot_skill = bot_skill
             if extra_state is not None:
-                extras = [v.value for v in extra_state[i]]
-                cfg.use_labels = ObsBuffer.LABELS.value in extras
-                cfg.use_depth = ObsBuffer.DEPTH.value in extras
-                cfg.use_automap = ObsBuffer.AUTOMAP.value in extras
+                if isinstance(extra_state[0], ObsBuffer):
+                    extra_state = [v.value for v in extra_state[i]]
+                cfg.use_labels = ObsBuffer.LABELS.value in extra_state
+                cfg.use_depth = ObsBuffer.DEPTH.value in extra_state
+                cfg.use_automap = ObsBuffer.AUTOMAP.value in extra_state
             if doom_map is not None:
                 cfg.doom_map = doom_map
             cfg.episode_timeout = episode_timeout
@@ -408,7 +435,7 @@ class VizdoomMPEnv(Env):
 
         self.envs = []
         for i, cfg in enumerate(self.players_cfg):
-            e = PlayerEnv(cfg, discrete7=discrete7)
+            e = PlayerEnv(cfg, discrete7=discrete7, seed=seed)
             self.envs.append(e)
 
         if len(self.envs) == 1:
@@ -442,10 +469,6 @@ class VizdoomMPEnv(Env):
             )
             rwds.append(rwd_p)
 
-        if done:
-            outcome = self.reward_fn.outcome()
-            info["outcome"] = outcome
-            rwds = [(outcome[i],) + rwd_p for i, rwd_p in enumerate(rwds)]
         # total rewards
         rwds = [sum(rwd_p) for rwd_p in rwds]
         return obs, rwds, done, info
@@ -470,7 +493,6 @@ class VizdoomMPEnv(Env):
     def get_player_replays(self):
         replays = {}
         for e in self.envs:
-            if e.record:
-                replays[e.cfg.name] = e.replay
+            replays[e.cfg.name] = e.replay
 
         return replays

@@ -2,43 +2,40 @@ import random
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from torchvision import transforms
 import numpy as np
 from collections import deque
 from copy import deepcopy
 
-from doom_arena import VizdoomMPEnv
-from doom_arena.player import ObsBuffer
+from doom_arena import VizdoomMPEnv, ObsBuffer
 
 from agents.dqn import DQN, epsilon_greedy
-from agents.utils import stack_dict, to_tensor, resize, minmax, update_ema
+from agents.utils import update_ema
 
 
 device = "cuda"
 
-N_EPOCHS = 50
 DTYPE = torch.float32
 N_STACK_FRAMES = 1
-GAMMA = 0.95
+GAMMA = 0.99
 EPISODES = 500
-BATCH_SIZE = 32
-REPLAY_BUFFER_SIZE = 10000
-LEARNING_RATE = 1e-4
+BATCH_SIZE = 128
+REPLAY_BUFFER_SIZE = 50000
+LEARNING_RATE = 1e-3
 EPSILON_START = 1.0
 EPSILON_END = 0.1
 EPSILON_DECAY = 0.995
 
 if __name__ == "__main__":
-    frame_transform = transforms.Compose([stack_dict, to_tensor, resize, minmax])
     env = VizdoomMPEnv(
         num_players=1,
-        num_bots=16,
+        num_bots=4,
         bot_skill=0,
-        doom_map="TRNM",
-        extra_state=[ObsBuffer.LABELS, ObsBuffer.DEPTH],
-        episode_timeout=120 * 35,
+        doom_map="ROOM",
+        episode_timeout=2000,
         n_stack_frames=N_STACK_FRAMES,
-        player_transform=[frame_transform],
+        extra_state=[ObsBuffer.LABELS, ObsBuffer.DEPTH],
+        hud="none",
+        crosshair=True,
     )
 
     dqn = DQN(
@@ -93,28 +90,28 @@ if __name__ == "__main__":
 
         # train if buffer has enough samples
         dqn.train()
-        for _ in range(N_EPOCHS):
-            batch = random.sample(replay_buffer, BATCH_SIZE)
-            obs, actions, rewards, next_obs, dones = zip(*batch)
 
-            obs = torch.stack(obs, 0).to(device, dtype=DTYPE)
-            next_obs = torch.stack(next_obs, 0).to(device, dtype=DTYPE)
-            actions = torch.tensor(actions, dtype=torch.long).to(device)
-            rewards = torch.tensor(rewards, dtype=DTYPE).to(device)
-            dones = torch.tensor(dones, dtype=DTYPE).to(device)
+        batch = random.sample(replay_buffer, BATCH_SIZE)
+        obs, actions, rewards, next_obs, dones = zip(*batch)
 
-            q_values = dqn(obs).gather(1, actions.unsqueeze(1)).squeeze(1)
+        obs = torch.stack(obs, 0).to(device, dtype=DTYPE)
+        next_obs = torch.stack(next_obs, 0).to(device, dtype=DTYPE)
+        actions = torch.tensor(actions, dtype=torch.long).to(device)
+        rewards = torch.tensor(rewards, dtype=DTYPE).to(device)
+        dones = torch.tensor(dones, dtype=DTYPE).to(device)
 
-            with torch.no_grad():
-                next_q_values = dqn_tgt(next_obs).max(1).values
-                target_q_values = rewards + GAMMA * next_q_values * (1 - dones)
+        q_values = dqn(obs).gather(1, actions.unsqueeze(1)).squeeze(1)
 
-            loss = F.mse_loss(q_values, target_q_values)
-            q_loss_list.append(loss.item())
+        with torch.no_grad():
+            next_q_values = dqn_tgt(next_obs).max(1).values
+            target_q_values = rewards + GAMMA * next_q_values * (1 - dones)
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        loss = F.mse_loss(q_values, target_q_values)
+        q_loss_list.append(loss.item())
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
         scheduler.step()
 
         # Update epsilon
@@ -126,9 +123,9 @@ if __name__ == "__main__":
         obs = env.reset()
         eval_return = 0
         while not done:
-            obs = obs[0].to(device, dtype=DTYPE)
+            obs = obs[0].to(device, dtype=DTYPE).unsqueeze(0)
             with torch.no_grad():
-                act = dqn(obs.unsqueeze(0)).argmax().item()
+                act = dqn(obs).argmax().item()
             obs, rwd, done, info = env.step(act)
             eval_return += rwd[0]
 
