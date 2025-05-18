@@ -177,15 +177,17 @@ class PlayerEnv(Env):
         if isinstance(action, np.ndarray) or isinstance(action, torch.Tensor):
             action = action.tolist()
         if self.discrete7:
-            # action = VIZDOOM_ACTIONS[action]
-            # onehot
-            if action == 0:
-                # noop
-                action = [0] * self.action_space.n
-            else:
-                action = [
-                    1 if (i + 1) == action else 0 for i in range(self.action_space.n)
-                ]
+            num_configured_buttons = len(self._buttons)
+            processed_action = [0] * num_configured_buttons
+            if action > 0:  # action is 1-indexed from Discrete(num_buttons+1) space; 0 is no-op.
+                            # Valid button actions are 1 to num_configured_buttons.
+                button_index = action - 1 
+                if button_index < num_configured_buttons: # Check if button_index is valid
+                    processed_action[button_index] = 1
+                # If action > num_configured_buttons (i.e., action > self.action_space.n -1), 
+                # it's an invalid action from the space, results in a no-op.
+                # This should ideally not happen if sampling correctly from the space.
+            action = processed_action # Use the processed list for ViZDoom
         # action = self.adjust_action(action)
         # vizdoom step
         rwd = self.game.make_action(action, tics=self.frame_skip)
