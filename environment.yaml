@@ -4,20 +4,37 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.12
   - pytorch
   - torchvision
   - numpy
   - matplotlib
   - jupyter
   - ipykernel
+  - ipython
+  - ipywidgets
+  - jupyterlab
+  - nbconvert
+  - notebook
+  - blas
+  - cloudpickle
+  - einops
+  - networkx
+  - packaging
+  - pillow
+  - portpicker
+  - pyyaml
+  - pandas
+  - requests
+  - libjpeg
+  - libpng
   - pip
   - pip:
     - vizdoom
-    - portpicker
+    - farama-notifications
     - gym
     - gymnasium
-    - einops
-    - pyyaml
-    - cloudpickle
-    - farama-notifications 
+    - onnx
+    - onnx2pytorch
+    - pygame
+    - sympy
