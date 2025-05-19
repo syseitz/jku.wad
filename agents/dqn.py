@@ -1,53 +1,39 @@
-from typing import Dict
+# dqn.py
 
-import random
 import torch
-from torch import nn
+import torch.nn as nn
 from einops import rearrange
 from gym import Env
-
-from agents.utils import Downsample, ResidualBlock
+import random
+from typing import Dict
+from collections import OrderedDict
 
 
 class DQN(nn.Module):
-    def __init__(
-        self, space: int = 2, input_dim: int = 3, action_space: int = 8, dim: int = 128
-    ):
+    """Basic Deep Q network."""
+
+    def __init__(self, input_dim: int = 3, action_space: int = 8, dim: int = 128):
         super().__init__()
 
-        if space == 2:
-            self.embed = nn.Conv2d(input_dim, dim, kernel_size=1)
-        if space == 3:
-            self.embed = nn.Conv3d(input_dim, dim, kernel_size=1)
+        self.input_dim = input_dim
+        self.action_space = action_space
+        self.dim = dim
 
-        self.resnet = nn.Sequential(
-            ResidualBlock(space, dim=dim, kernel_size=3, padding=1),
-            Downsample(space, dim=dim, downsample=4),
-            ResidualBlock(space, dim=dim, kernel_size=3, padding=1),
-            Downsample(space, dim=dim, downsample=4),
-            ResidualBlock(space, dim=dim, kernel_size=3, padding=1),
-            Downsample(space, dim=dim),
-            ResidualBlock(space, dim=dim, kernel_size=3, padding=1),
-        )
+        # TODO: Replace with a more powerful encoder
+        self.encoder = nn.Conv2d(input_dim, dim, 1)
+        self.action_net = nn.Linear(dim, action_space)
 
-        self.mlp = nn.Sequential(
-            nn.Linear(4**2 * dim, 512), nn.SiLU(), nn.Linear(512, action_space)
-        )
-
-    def forward(self, frames: torch.Tensor):
-        x = self.embed(frames)
-        x = self.resnet(x)
-        # meanpool
-        x = rearrange(x, "b c ... -> b (c ...)")
-        x = self.mlp(x)
-        return x
+    def forward(self, frame: torch.Tensor) -> torch.Tensor:
+        x = self.encoder(frame)
+        x = rearrange(x, "b c ... -> b c (...)").mean(-1)
+        return self.action_net(x)
 
 
 @torch.no_grad
 def epsilon_greedy(
     env: Env,
     model: nn.Module,
-    state: torch.Tensor,
+    obs: torch.Tensor,
     epsilon: float,
     device: torch.device,
     dtype: torch.dtype,
@@ -55,5 +41,18 @@ def epsilon_greedy(
     if random.random() < epsilon:
         return env.action_space.sample()
     else:
-        state = state.to(device, dtype=dtype).unsqueeze(0)
-        return model(state).argmax().item()
+        obs = obs.to(device, dtype=dtype).unsqueeze(0)
+        return model(obs).argmax().item()
+
+
+@torch.no_grad()
+def update_ema(ema_model, model, decay: float = 0.995):
+    """Exponential moving average model updates."""
+    ema_params = OrderedDict(ema_model.named_parameters())
+    if hasattr(model, "module"):
+        model_params = OrderedDict(model.module.named_parameters())
+    else:
+        model_params = OrderedDict(model.named_parameters())
+
+    for name, param in model_params.items():
+        ema_params[name].mul_(decay).add_(param.data, alpha=1 - decay)
