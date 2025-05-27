@@ -374,6 +374,7 @@ class VizdoomMPEnv(Env):
         doom_map: str = "ROOM",
         crosshair: Sequence[bool] = True,
         hud: Sequence[str] = "full",
+        screen_format: Union[vzd.ScreenFormat, Sequence[vzd.ScreenFormat]] = vzd.ScreenFormat.CRCGCB,
         seed: int = 1337,
     ):
         if config_path == "doom_arena/scenarios/jku.cfg":
@@ -392,8 +393,10 @@ class VizdoomMPEnv(Env):
             extra_state = [extra_state] * num_players
         if not isinstance(crosshair, Sequence):
             crosshair = [crosshair] * num_players
-        if not isinstance(hud, List):
+        if not isinstance(hud, Sequence):
             hud = [hud] * num_players
+        if not isinstance(screen_format, Sequence):
+            screen_format = [screen_format] * num_players
         # select empty port for multiplayer
         self.port = pick_unused_port()
         # host cfg
@@ -409,7 +412,7 @@ class VizdoomMPEnv(Env):
             cfg.config_path = config_path
             cfg.player_mode = vzd.Mode.PLAYER
             cfg.screen_resolution = vzd.ScreenResolution.RES_256X192
-            cfg.screen_format = vzd.ScreenFormat.CRCGCB
+            cfg.screen_format = screen_format[i]
             cfg.ticrate = 35
             cfg.crosshair = crosshair[i]
             cfg.respawns = True
