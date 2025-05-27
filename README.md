@@ -11,7 +11,7 @@
 
 The environment is based on the 1993 first person shooter __DOOM__.
 It is set up as a deathmatch, and can be played as a single agent against bots, or with multiple agents against each other.
-- __Actions:__ `Discrete(6)`, simplified game buttons
+- __Actions:__ `Discrete(8)`, simplified game buttons
 - __Observations:__ `192x256` RGB game frames
 
 ## Setup
