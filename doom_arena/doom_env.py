@@ -25,6 +25,7 @@ from doom_arena.parallel import ParallelEnv
 from doom_arena.utils import (
     get_doom_buttons,
     get_screen_shape,
+    CHANNELS_FORMAT,
     to_tensor,
     resize,
     minmax,
@@ -179,15 +180,19 @@ class PlayerEnv(Env):
         if self.discrete7:
             num_configured_buttons = len(self._buttons)
             processed_action = [0] * num_configured_buttons
-            if action > 0:  # action is 1-indexed from Discrete(num_buttons+1) space; 0 is no-op.
-                            # Valid button actions are 1 to num_configured_buttons.
-                button_index = action - 1 
-                if button_index < num_configured_buttons: # Check if button_index is valid
+            if (
+                action > 0
+            ):  # action is 1-indexed from Discrete(num_buttons+1) space; 0 is no-op.
+                # Valid button actions are 1 to num_configured_buttons.
+                button_index = action - 1
+                if (
+                    button_index < num_configured_buttons
+                ):  # Check if button_index is valid
                     processed_action[button_index] = 1
-                # If action > num_configured_buttons (i.e., action > self.action_space.n -1), 
+                # If action > num_configured_buttons (i.e., action > self.action_space.n -1),
                 # it's an invalid action from the space, results in a no-op.
                 # This should ideally not happen if sampling correctly from the space.
-            action = processed_action # Use the processed list for ViZDoom
+            action = processed_action  # Use the processed list for ViZDoom
         # action = self.adjust_action(action)
         # vizdoom step
         rwd = self.game.make_action(action, tics=self.frame_skip)
@@ -196,24 +201,6 @@ class PlayerEnv(Env):
         self._record_replay(obs)
         self._update_game_vars()
         obs = self._update_frame_stack(obs)
-
-        if done:
-            # game over, all obs to white
-            game_over_obs = {}
-            for k in obs:
-                shape = get_screen_shape(
-                    self.cfg.screen_format,
-                    self.cfg.screen_resolution,
-                    labels=(k == "labels"),
-                    depth=(k == "depth"),
-                    automap=(k == "automap"),
-                )
-                shape = list(shape)
-                if k != "screen":
-                    shape[0] = shape[0] - 3  # remove rgb
-                game_over_obs[k] = np.ones(shape, dtype=np.uint8) * 255
-            obs = game_over_obs
-
         # apply (frame) transforms
         if self.transform is not None:
             obs = self.transform(obs)
@@ -238,25 +225,42 @@ class PlayerEnv(Env):
         game.set_seed(self.doom_seed)
         game.init()
         self.game = game
-
+        # game variables
         self._game_var_list = self.game.get_available_game_variables()
         self._update_game_vars(reset=True)
+        # active buffers
+        self._buffers = ["screen"]
+        if self.game.is_labels_buffer_enabled():
+            self._buffers.append("labels")
+        if self.game.is_depth_buffer_enabled():
+            self._buffers.append("depth")
+        if self.game.is_automap_buffer_enabled():
+            self._buffers.append("automap")
 
     def _grab(self):
         state = self.game.get_state()
         done = self.game.is_episode_finished()
-        if done:
-            # set observation to black if done
-            tmp = np.ndarray(self.observation_space.shape, self.observation_space.dtype)
-            obs = {"screen": tmp[:3]}
-            if self.cfg.use_labels:
-                obs["labels"] = tmp[3:4]
-            if self.cfg.use_depth:
-                obs["depth"] = tmp[4:5]
-            if self.cfg.use_automap:
-                obs["automap"] = tmp[5:]
+        # game over, all obs to white
+        if done and state is None:
+            screen_channels = CHANNELS_FORMAT[self.cfg.screen_format]
+            obs = {}
+            for k in self._buffers:
+                shape = get_screen_shape(
+                    self.cfg.screen_format,
+                    self.cfg.screen_resolution,
+                    labels=(k == "labels"),
+                    depth=(k == "depth"),
+                    automap=(k == "automap"),
+                )
+                shape = list(shape)
+                if k != "screen":
+                    shape[0] = shape[0] - screen_channels  # remove screen channels
+                obs[k] = np.ones(shape, dtype=np.uint8) * 255
         else:
-            obs = {"screen": state.screen_buffer}
+            screen = state.screen_buffer
+            # add channels to grayscale
+            screen = screen[None] if screen.ndim == 2 else screen
+            obs = {"screen": screen}
             if state.labels_buffer is not None:
                 obs["labels"] = state.labels_buffer[None]
             if state.depth_buffer is not None:
@@ -266,19 +270,22 @@ class PlayerEnv(Env):
         return state, obs, done
 
     def _update_frame_stack(self, obs, reset: bool = False):
-        if reset:
-            # clear and populate frame stack
-            self.frame_stack.clear()
-            for _ in range(self.frame_stack.maxlen):
-                self.frame_stack.append(obs)
+        if self.frame_stack.maxlen == 1:
+            return obs
         else:
-            self.frame_stack.append(obs)
-
-        # return stacked observation dictionary
-        buffers = {k: [frames[k] for frames in self.frame_stack] for k in obs}
-        obs = {k: np.stack(v, 1) for k, v in buffers.items()}  # (c, t, h, w)
-        obs = {k: o if o.shape[1] != 1 else o.squeeze(1) for k, o in obs.items()}
-        return obs
+            if reset:
+                # clear and populate frame stack
+                self.frame_stack.clear()
+                for _ in range(self.frame_stack.maxlen):
+                    self.frame_stack.append(obs)
+            else:
+                self.frame_stack.append(obs)
+            # return stacked observation dictionary
+            obs = {
+                k: np.stack([frames[k] for frames in self.frame_stack], axis=1)
+                for k in obs
+            }
+            return obs
 
     def _add_bot(self):
         self.game.send_game_command("removebots")
@@ -374,7 +381,9 @@ class VizdoomMPEnv(Env):
         doom_map: str = "ROOM",
         crosshair: Sequence[bool] = True,
         hud: Sequence[str] = "full",
-        screen_format: Union[vzd.ScreenFormat, Sequence[vzd.ScreenFormat]] = vzd.ScreenFormat.CRCGCB,
+        screen_format: Union[
+            vzd.ScreenFormat, Sequence[vzd.ScreenFormat]
+        ] = vzd.ScreenFormat.CRCGCB,
         seed: int = 1337,
     ):
         if config_path == "doom_arena/scenarios/jku.cfg":

@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from doom_arena.player import player_setup
 
 
-CHANNELS = {
+CHANNELS_FORMAT = {
     vzd.ScreenFormat.CBCGCR: 3,
     vzd.ScreenFormat.CRCGCB: 3,
     vzd.ScreenFormat.GRAY8: 1,
@@ -25,7 +25,7 @@ def get_screen_shape(
     depth: bool = False,
     automap: bool = False,
 ):
-    ch = CHANNELS[screen_format] + int(labels) + int(depth) + 3 * int(automap)
+    ch = CHANNELS_FORMAT[screen_format] + int(labels) + int(depth) + 3 * int(automap)
     match = re.search(r"RES_(\d+)X(\d+)", str(screen_resolution))
     return ch, int(match.group(2)), int(match.group(1))
 
@@ -59,12 +59,19 @@ def to_tensor(raw: Dict[str, np.ndarray]):
     return {k: _to_tensor(v) for k, v in raw.items()}
 
 
-def resize(raw: Dict[str, torch.Tensor]):
+def resize(raw: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     def _resize(x):
-        if x.ndim < 4:
-            x = x.unsqueeze(0)
+        has_time = x.ndim == 4
+        if has_time:
+            x = x.permute(1, 0, 2, 3)  # (c, t, h, w) -> (t, c, h, w)
+        else:
+            x = x.unsqueeze(0)  # (c, h, w) -> (1, c, h, w)
+        # downsample resolution to fixed size
         x = F.interpolate(x, (128, 128))
-        return x.squeeze(0)
+        if has_time:
+            return x.permute(1, 0, 2, 3)  # (t, c, h, w) -> (c, t, h, w)
+        else:
+            return x.squeeze(0)  # (1, c, h, w) -> (c, h, w)
 
     return {k: _resize(v) for k, v in raw.items()}
 
@@ -72,7 +79,7 @@ def resize(raw: Dict[str, torch.Tensor]):
 def minmax(raw: Dict[str, torch.Tensor]):
     def _minmax(x, key):
         if key == "screen":
-            # rgb
+            # rgb / grayscale (fixed ranges)
             x = x / 255
         else:
             # other
