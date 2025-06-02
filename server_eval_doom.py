@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Sequence, List, Union, Dict
+from typing import Callable, Optional, Sequence, List, Union, Dict, Tuple
 from concurrent import futures
 
 
@@ -784,9 +784,7 @@ class VizdoomMPEnv(Env):
         doom_map: str = "ROOM",
         crosshair: Sequence[bool] = True,
         hud: Sequence[str] = "full",
-        screen_format: Union[
-            vzd.ScreenFormat, Sequence[vzd.ScreenFormat]
-        ] = vzd.ScreenFormat.CRCGCB,
+        screen_format: Union[int, Sequence[int]] = 0,
         seed: int = 1337,
     ):
         if config_path == "doom_arena/scenarios/jku.cfg":
@@ -797,12 +795,15 @@ class VizdoomMPEnv(Env):
             warn(f"Using custom untested configuration : {config_path}.")
         self.num_players = num_players
         self.num_bots = num_bots
+        # extra state
+        extra_state = [] if extra_state is None else extra_state
+        if extra_state and extra_state[0] is None:
+            extra_state = [[] for _ in extra_state]
+        elif not isinstance(extra_state[0], (list, tuple)):
+            extra_state = [extra_state] * num_players
+        # other configs
         if not isinstance(n_stack_frames, Sequence):
             n_stack_frames = [n_stack_frames] * num_players
-        if extra_state is not None and len(extra_state) == 0:
-            extra_state = None
-        if extra_state is not None and not isinstance(extra_state[0], Sequence):
-            extra_state = [extra_state] * num_players
         if not isinstance(crosshair, Sequence):
             crosshair = [crosshair] * num_players
         if not isinstance(hud, Sequence):
@@ -824,7 +825,7 @@ class VizdoomMPEnv(Env):
             cfg.config_path = config_path
             cfg.player_mode = vzd.Mode.PLAYER
             cfg.screen_resolution = vzd.ScreenResolution.RES_256X192
-            cfg.screen_format = screen_format[i]
+            cfg.screen_format = vzd.ScreenFormat(screen_format[i])
             cfg.ticrate = 35
             cfg.crosshair = crosshair[i]
             cfg.respawns = True
@@ -832,12 +833,12 @@ class VizdoomMPEnv(Env):
             cfg.n_stack_frames = n_stack_frames[i]
             cfg.transform = transforms.Compose([to_tensor, resize, minmax, cat_dict])
             cfg.bot_skill = bot_skill
-            if extra_state is not None:
-                if isinstance(extra_state[0], ObsBuffer):
-                    extra_state = [v.value for v in extra_state[i]]
-                cfg.use_labels = ObsBuffer.LABELS.value in extra_state
-                cfg.use_depth = ObsBuffer.DEPTH.value in extra_state
-                cfg.use_automap = ObsBuffer.AUTOMAP.value in extra_state
+            if extra_state[i] is not None:
+                if isinstance(extra_state[i][0], ObsBuffer):
+                    extra_state[i] = [v.value for v in extra_state[i]]
+                cfg.use_labels = ObsBuffer.LABELS.value in extra_state[i]
+                cfg.use_depth = ObsBuffer.DEPTH.value in extra_state[i]
+                cfg.use_automap = ObsBuffer.AUTOMAP.value in extra_state[i]
             if doom_map is not None:
                 cfg.doom_map = doom_map
             cfg.episode_timeout = episode_timeout
@@ -866,7 +867,6 @@ class VizdoomMPEnv(Env):
         if reward_fn is None:
             reward_fn = VizDoomReward(num_players)
         self.reward_fn = reward_fn
-
     def step(self, actions):
         obs, vizdoom_rwds, dones, info = self.env.step(actions)
         if len(self.envs) == 1:
