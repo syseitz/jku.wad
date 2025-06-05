@@ -392,12 +392,27 @@ class VizdoomMPEnv(Env):
             warn(f"Using custom untested configuration : {config_path}.")
         self.num_players = num_players
         self.num_bots = num_bots
+
         # extra state
-        extra_state = [] if extra_state is None else extra_state
-        if extra_state and extra_state[0] is None:
-            extra_state = [[] for _ in extra_state]
-        elif not isinstance(extra_state[0], (list, tuple)):
-            extra_state = [extra_state] * num_players
+        if extra_state is None or len(extra_state) == 0:
+            extra_state = [None] * num_players
+        else:
+            if not isinstance(extra_state, (List, Tuple)):
+                # wrap non-list element if single string
+                extra_state = [extra_state]
+            if any(isinstance(x, (List, Tuple)) for x in extra_state):
+                if not all(isinstance(x, (List, Tuple)) for x in extra_state):
+                    # wrap non-list elements in list
+                    extra_state = [
+                        [x] if not isinstance(x, (List, Tuple)) else x
+                        for x in extra_state
+                    ]
+                assert (
+                    len(extra_state) == num_players
+                ), "One extra state list per player."
+            else:
+                extra_state = [extra_state] * num_players
+
         # other configs
         if not isinstance(n_stack_frames, Sequence):
             n_stack_frames = [n_stack_frames] * num_players
