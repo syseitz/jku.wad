@@ -985,8 +985,11 @@ class Agent:
         logits = self.model(frames)
         if isinstance(logits, tuple):
             logits, _ = logits
-        probs = Categorical(logits=logits)
-        return probs.sample().cpu().numpy()[0]
+        if "algo_type" not in self.config or self.config["algo_type"] == "POLICY":
+            act = Categorical(logits=logits).sample()
+        else:
+            act = logits.argmax(-1)
+        return act.cpu().numpy()[0]
 
 
 def run_episode(agent: Agent, seed: int = 1337):
