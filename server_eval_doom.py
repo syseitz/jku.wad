@@ -33,6 +33,9 @@ from gymnasium import Env
 from gymnasium.spaces import Box, MultiDiscrete, Discrete, Tuple as GymTuple
 
 
+ROOT = "/system/user/galletti/git/jku.wad"
+
+
 ################################## grading reward ######################################
 
 
@@ -107,7 +110,7 @@ def to_tensor(raw: Dict[str, np.ndarray]):
     return {k: _to_tensor(v) for k, v in raw.items()}
 
 
-def resize(raw: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+def resize(raw: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
     def _resize(x):
         has_time = x.ndim == 4
         if has_time:
@@ -336,12 +339,16 @@ def mp_game_setup(game, bot_skill: int = 0):
     game.add_game_args("+nomonsters 1")
     if bot_skill == 0:
         # easy bots
-        game.add_game_args(f"+viz_bots_path {os.getcwd()}/doom_arena/bots/easy.cfg")
+        game.add_game_args(
+            f"+viz_bots_path {ROOT}/doom_arena/scenarios/doom_arena/bots/easy.cfg"
+        )
     if bot_skill == 1:
         pass
     if bot_skill >= 2:
         # hard bots
-        game.add_game_args(f"+viz_bots_path {os.getcwd()}/doom_arena/bots/hard.cfg")
+        game.add_game_args(
+            f"+viz_bots_path {ROOT}/doom_arena/scenarios/doom_arena/bots/hard.cfg"
+        )
     return game
 
 
@@ -771,7 +778,7 @@ class VizdoomMPEnv(Env):
 
     def __init__(
         self,
-        config_path: str = "doom_arena/scenarios/jku.cfg",
+        config_path: str = f"{ROOT}/doom_arena/scenarios/jku.cfg",
         reward_fn: Optional[Callable] = None,
         num_players: int = 1,
         num_bots: int = 0,
@@ -786,7 +793,7 @@ class VizdoomMPEnv(Env):
         screen_format: Union[int, Sequence[int]] = 0,
         seed: int = 1337,
     ):
-        if config_path == "doom_arena/scenarios/jku.cfg":
+        if config_path == f"{ROOT}/doom_arena/scenarios/jku.cfg":
             assert doom_map in ["TRNM", "TRNMBIG", "ROOM"]
             if doom_map == "ROOM":
                 num_bots = min(num_bots, 4)
@@ -978,7 +985,6 @@ class Agent:
         self.config = config
         self.device = device
 
-    @torch.no_grad
     def select_action(self, frames):
         frames = frames.unsqueeze(0).to(DEVICE, dtype=DTYPE)
         logits = self.model(frames)
@@ -998,7 +1004,8 @@ def run_episode(agent: Agent, seed: int = 1337):
     done = False
     while not done:
         obs = obs[0]
-        action = agent.select_action(obs)
+        with torch.no_grad():
+            action = agent.select_action(obs)
         obs, rwd, done, _ = env.step(action)
         score += rwd[0]
     env.close()
