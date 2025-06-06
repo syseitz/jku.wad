@@ -16,7 +16,6 @@ from torch.distributions.categorical import Categorical
 import onnx
 from onnx2pytorch import ConvertModel
 
-from gym.spaces import Tuple as GymTuple
 from copy import deepcopy
 from collections import deque
 from portpicker import pick_unused_port
@@ -29,9 +28,9 @@ import copy
 import enum
 
 import vizdoom as vzd
-from gym import Env
 from torchvision import transforms
-from gym.spaces import Box, MultiDiscrete, Discrete
+from gymnasium import Env
+from gymnasium.spaces import Box, MultiDiscrete, Discrete, Tuple as GymTuple
 
 
 ################################## grading reward ######################################
