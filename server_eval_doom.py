@@ -33,7 +33,7 @@ from gymnasium import Env
 from gymnasium.spaces import Box, MultiDiscrete, Discrete, Tuple as GymTuple
 
 
-ROOT = "/system/user/galletti/git/jku.wad"
+ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 ################################## grading reward ######################################
