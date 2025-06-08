@@ -973,6 +973,7 @@ def make_env(seed, config) -> VizdoomMPEnv:
         bot_skill=0,
         doom_map="ROOM",
         episode_timeout=2000,
+        screen_format=config["screen_format"],
         n_stack_frames=config["n_stack_frames"],
         extra_state=extra_state,
         hud=config["hud"],
