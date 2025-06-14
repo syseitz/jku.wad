@@ -213,7 +213,10 @@ class PlayerEnv(Env):
         # apply (frame) transforms
         if self.transform is not None:
             obs = self.transform(obs)
+<<<<<<< HEAD
             obs = obs.permute(1, 2, 0).numpy() 
+=======
+>>>>>>> jku.wad/main
         return obs, rwd, done, {}
 
     def close(self):
