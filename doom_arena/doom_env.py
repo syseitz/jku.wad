@@ -476,34 +476,37 @@ class VizdoomMPEnv(Env):
         self.reward_fn = reward_fn
 
     def step(self, actions):
-        obs, vizdoom_rwds, dones, info = self.env.step(actions)
         if len(self.envs) == 1:
-            # single player
-            obs = [obs]
-            vizdoom_rwds = [vizdoom_rwds]
-            dones = [dones]
-        done = all(dones)
-
-        rwds = []
-        for player_idx in range(self.num_players):
-            rwd_p = self.reward_fn(
-                vizdoom_rwds[player_idx],
-                self.envs[player_idx].unwrapped._game_vars,
-                self.envs[player_idx].unwrapped._game_vars_pre,
-                player_idx,
+            obs, vizdoom_rwd, done, info = self.envs[0].step(actions)
+            rwd = self.reward_fn(
+                vizdoom_rwd,
+                self.envs[0].unwrapped._game_vars,
+                self.envs[0].unwrapped._game_vars_pre,
+                0,
             )
-            rwds.append(rwd_p)
-
-        # total rewards
-        rwds = [sum(rwd_p) for rwd_p in rwds]
-        return obs, rwds, done, info
+            rwd = sum(rwd)
+            return obs, rwd, done, info
+        else:
+            # Handle multiple players, assuming ParallelEnv handles this
+            obs, vizdoom_rwds, dones, infos = self.env.step(actions)
+            rwds = []
+            for player_idx in range(self.num_players):
+                rwd_p = self.reward_fn(
+                    vizdoom_rwds[player_idx],
+                    self.envs[player_idx].unwrapped._game_vars,
+                    self.envs[player_idx].unwrapped._game_vars_pre,
+                    player_idx,
+                )
+                rwds.append(sum(rwd_p))
+            done = all(dones)
+            return obs, rwds, done, infos
 
     def reset(self, **kwargs):
         self.reward_fn.reset()
-        self.obs = self.env.reset(**kwargs)
-        if len(self.envs) == 1:
-            self.obs = [self.obs]
-        return self.obs
+        obs = self.env.reset(**kwargs)
+        if len(self.envs) > 1:
+            return [e.reset(**kwargs) for e in self.envs]
+        return obs  # Return single observation for num_players=1
 
     def enable_replay(self):
         print("Enabling replays!")
