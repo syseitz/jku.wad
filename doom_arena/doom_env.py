@@ -166,9 +166,9 @@ class PlayerEnv(Env):
 
         if self.transform is not None:
             obs = self.transform(obs)
-            #print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, np.ndarray) else "not array")
+            print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, np.ndarray) else "not array")
             obs = obs.permute(1, 2, 0).cpu().numpy()
-            #print("Final obs type:", type(obs), "shape:", obs.shape)
+            print("Final obs type:", type(obs), "shape:", obs.shape)
         return obs
 
     def step(self, action):
@@ -195,28 +195,31 @@ class PlayerEnv(Env):
         self._update_game_vars()
         obs = self._update_frame_stack(obs)
 
-        if done:
-            # game over, all obs to white
-            game_over_obs = {}
-            for k in obs:
-                shape = get_screen_shape(
-                    self.cfg.screen_format,
-                    self.cfg.screen_resolution,
-                    labels=(k == "labels"),
-                    depth=(k == "depth"),
-                    automap=(k == "automap"),
-                )
-                shape = list(shape)
-                if k != "screen":
-                    shape[0] = shape[0] - 3  # remove rgb
-                game_over_obs[k] = np.ones(shape, dtype=np.uint8) * 255
-            obs = game_over_obs
+        # if done:
+        #     # game over, all obs to white
+        #     game_over_obs = {}
+        #     for k in obs:
+        #         shape = get_screen_shape(
+        #             self.cfg.screen_format,
+        #             self.cfg.screen_resolution,
+        #             labels=(k == "labels"),
+        #             depth=(k == "depth"),
+        #             automap=(k == "automap"),
+        #         )
+        #         shape = list(shape)
+        #         if k != "screen":
+        #             shape[0] = shape[0] - 3  # remove rgb
+        #         game_over_obs[k] = np.ones(shape, dtype=np.uint8) * 255
+        #     obs = game_over_obs
 
         # apply (frame) transforms
         if self.transform is not None:
             obs = self.transform(obs)
-            obs = obs.permute(1, 2, 0).numpy() 
+            obs = obs.permute(1, 2, 0).cpu().numpy() 
 
+        return obs, rwd, done, {}
+
+    
 
     def close(self):
         if self.game:
