@@ -166,6 +166,9 @@ class PlayerEnv(Env):
         obs = self._update_frame_stack(obs, reset=True)
 
         if self.transform is not None:
+            print("Before transformation - Type:", type(obs), "Keys:", list(obs.keys()) if isinstance(obs, dict) else "not dict")
+            for k, v in obs.items():
+                print(f"  Buffer {k} shape: {v.shape if isinstance(v, np.ndarray) else 'not array'}")
             obs = self.transform(obs)
             print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, torch.Tensor) else "not tensor")
             if not isinstance(obs, torch.Tensor):
@@ -217,6 +220,9 @@ class PlayerEnv(Env):
 
         # apply (frame) transforms
         if self.transform is not None:
+            print("Before transformation - Type:", type(obs), "Keys:", list(obs.keys()) if isinstance(obs, dict) else "not dict")
+            for k, v in obs.items():
+                print(f"  Buffer {k} shape: {v.shape if isinstance(v, np.ndarray) else 'not array'}")
             obs = self.transform(obs)
             print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, torch.Tensor) else "not tensor")
             if not isinstance(obs, torch.Tensor):
