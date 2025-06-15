@@ -82,14 +82,15 @@ class PlayerEnv(Env):
         self.doom_seed = seed
         self.game = None
 
-        ch, h, w = get_screen_shape(
+        ch, _, _ = get_screen_shape(
             cfg.screen_format,
             cfg.screen_resolution,
             labels=cfg.use_labels,
             depth=cfg.use_depth,
             automap=cfg.use_automap,
         )
-        self.observation_space = Box(low=0.0, high=1.0, dtype=np.float32, shape=(h, w, ch))
+        # Assuming resize transforms to 128x128
+        self.observation_space = Box(low=0.0, high=1.0, dtype=np.float32, shape=(128, 128, ch))
 
         self._buttons = get_doom_buttons(cfg)
         if discrete7:
