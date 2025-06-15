@@ -166,7 +166,9 @@ class PlayerEnv(Env):
 
         if self.transform is not None:
             obs = self.transform(obs)
-            obs = obs.permute(1, 2, 0).numpy() 
+            #print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, np.ndarray) else "not array")
+            obs = obs.permute(1, 2, 0).cpu().numpy()
+            #print("Final obs type:", type(obs), "shape:", obs.shape)
         return obs
 
     def step(self, action):
@@ -244,16 +246,25 @@ class PlayerEnv(Env):
         done = self.game.is_episode_finished()
         if done:
             # set observation to black if done
-            tmp = np.ndarray(self.observation_space.shape, self.observation_space.dtype)
-            obs = {"screen": tmp[:3]}
-            if self.cfg.use_labels:
-                obs["labels"] = tmp[3:4]
-            if self.cfg.use_depth:
-                obs["depth"] = tmp[4:5]
-            if self.cfg.use_automap:
-                obs["automap"] = tmp[5:]
+            obs = {}
+            for k in self._buffers:
+                if k == "screen":
+                    ch = CHANNELS_FORMAT[self.cfg.screen_format]
+                elif k == "labels":
+                    ch = 1
+                elif k == "depth":
+                    ch = 1
+                elif k == "automap":
+                    ch = 3
+                else:
+                    continue
+                _, h, w = get_screen_shape(self.cfg.screen_format, self.cfg.screen_resolution)
+                obs[k] = np.ones((ch, h, w), dtype=np.uint8) * 255
         else:
-            obs = {"screen": state.screen_buffer}
+            screen = state.screen_buffer
+            if screen.ndim == 2:
+                screen = screen[None]  # Add channel dimension for grayscale
+            obs = {"screen": screen}
             if state.labels_buffer is not None:
                 obs["labels"] = state.labels_buffer[None]
             if state.depth_buffer is not None:
