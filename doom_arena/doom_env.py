@@ -166,7 +166,9 @@ class PlayerEnv(Env):
 
         if self.transform is not None:
             obs = self.transform(obs)
-            print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, np.ndarray) else "not array")
+            print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, torch.Tensor) else "not tensor")
+            if not isinstance(obs, torch.Tensor):
+                raise ValueError(f"Expected tensor after transform, got {type(obs)} with keys {list(obs.keys()) if isinstance(obs, dict) else 'not dict'}")
             obs = obs.permute(1, 2, 0).cpu().numpy()
             print("Final obs type:", type(obs), "shape:", obs.shape)
         return obs
@@ -215,11 +217,14 @@ class PlayerEnv(Env):
         # apply (frame) transforms
         if self.transform is not None:
             obs = self.transform(obs)
-            obs = obs.permute(1, 2, 0).cpu().numpy() 
+            print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, torch.Tensor) else "not tensor")
+            if not isinstance(obs, torch.Tensor):
+                raise ValueError(f"Expected tensor after transform, got {type(obs)} with keys {list(obs.keys()) if isinstance(obs, dict) else 'not dict'}")
+            obs = obs.permute(1, 2, 0).cpu().numpy()
+            print("Final obs type:", type(obs), "shape:", obs.shape)
 
         return obs, rwd, done, {}
 
-    
 
     def close(self):
         if self.game:
