@@ -50,11 +50,12 @@ def suppress_stdout(verbose):
         yield
 
 
-def to_tensor(raw: Dict[str, np.ndarray], device="cuda"):
+def to_tensor(raw: Dict[str, np.ndarray]):
     def _to_tensor(x):
         if isinstance(x, np.ndarray):
-            x = torch.from_numpy(x).float().to(device)
+            x = torch.from_numpy(x)
         return x
+
     return {k: _to_tensor(v) for k, v in raw.items()}
 
 
