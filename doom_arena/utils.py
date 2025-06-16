@@ -50,19 +50,20 @@ def suppress_stdout(verbose):
         yield
 
 
-def to_tensor(raw: Dict[str, np.ndarray]):
+def to_tensor(raw: Dict[str, np.ndarray], device="cuda"):
     def _to_tensor(x):
         if isinstance(x, np.ndarray):
-            x = torch.from_numpy(x)
+            x = torch.from_numpy(x).to(device).float()
         return x
-
     return {k: _to_tensor(v) for k, v in raw.items()}
 
 
 def resize(raw: Dict[str, torch.Tensor], device="cuda"):
     def _resize(x):
         if x.ndim < 4:
-            x = x.unsqueeze(0).to(device)
+            x = x.unsqueeze(0).to(device).float()  # Convert to float32
+        else:
+            x = x.to(device).float()  # Convert to float32
         x = F.interpolate(x, (128, 128), mode='bilinear', align_corners=False)
         return x.squeeze(0)
     return {k: _resize(v) for k, v in raw.items()}
