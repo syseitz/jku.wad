@@ -50,21 +50,20 @@ def suppress_stdout(verbose):
         yield
 
 
-def to_tensor(raw: Dict[str, np.ndarray]):
+def to_tensor(raw: Dict[str, np.ndarray], device="cuda"):
     def _to_tensor(x):
         if isinstance(x, np.ndarray):
-            x = torch.from_numpy(x).float()
+            x = torch.from_numpy(x).float().to(device)
         return x
     return {k: _to_tensor(v) for k, v in raw.items()}
 
 
-def resize(raw: Dict[str, torch.Tensor]):
+def resize(raw: Dict[str, torch.Tensor], device="cuda"):
     def _resize(x):
         if x.ndim < 4:
-            x = x.unsqueeze(0)
-        x = F.interpolate(x, (128, 128))
+            x = x.unsqueeze(0).to(device)
+        x = F.interpolate(x, (128, 128), mode='bilinear', align_corners=False)
         return x.squeeze(0)
-
     return {k: _resize(v) for k, v in raw.items()}
 
 
@@ -81,7 +80,7 @@ def minmax(raw: Dict[str, torch.Tensor]):
     return {k: _minmax(v, k) for k, v in raw.items()}
 
 
-def cat_dict(raw: Dict[str, torch.Tensor]):
-    # concat along channels
+def cat_dict(raw: Dict[str, torch.Tensor], device="cuda"):
     buffers = ["screen", "labels", "depth", "automap"]
-    return torch.cat([raw[k] for k in buffers if k in raw], 0)
+    tensors = [raw[k].to(device) for k in buffers if k in raw]
+    return torch.cat(tensors, dim=0)
