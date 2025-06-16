@@ -272,7 +272,7 @@ class PlayerEnv(Env):
             obs = {}
             for k in self._buffers:
                 if k == "screen":
-                    ch = CHANNELS_FORMAT[self.cfg.screen_format]
+                    ch = CHANNELS[self.cfg.screen_format]
                 elif k == "labels":
                     ch = 1
                 elif k == "depth":
