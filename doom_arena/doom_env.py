@@ -29,6 +29,7 @@ from doom_arena.utils import (
     resize,
     minmax,
     cat_dict,
+    CHANNELS
 )
 from doom_arena.reward import VizDoomReward
 from doom_arena.player import (
