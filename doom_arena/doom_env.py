@@ -166,15 +166,15 @@ class PlayerEnv(Env):
         obs = self._update_frame_stack(obs, reset=True)
 
         if self.transform is not None:
-            print("Before transformation - Type:", type(obs), "Keys:", list(obs.keys()) if isinstance(obs, dict) else "not dict")
+            #print("Before transformation - Type:", type(obs), "Keys:", list(obs.keys()) if isinstance(obs, dict) else "not dict")
             for k, v in obs.items():
-                print(f"  Buffer {k} shape: {v.shape if isinstance(v, np.ndarray) else 'not array'}")
+                #print(f"  Buffer {k} shape: {v.shape if isinstance(v, np.ndarray) else 'not array'}")
             obs = self.transform(obs)
-            print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, torch.Tensor) else "not tensor")
+            #print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, torch.Tensor) else "not tensor")
             if not isinstance(obs, torch.Tensor):
                 raise ValueError(f"Expected tensor after transform, got {type(obs)} with keys {list(obs.keys()) if isinstance(obs, dict) else 'not dict'}")
             obs = obs.permute(1, 2, 0).cpu().numpy()
-            print("Final obs type:", type(obs), "shape:", obs.shape)
+            #print("Final obs type:", type(obs), "shape:", obs.shape)
         return obs
 
     def step(self, action):
@@ -220,15 +220,15 @@ class PlayerEnv(Env):
 
         # apply (frame) transforms
         if self.transform is not None:
-            print("Before transformation - Type:", type(obs), "Keys:", list(obs.keys()) if isinstance(obs, dict) else "not dict")
+            #print("Before transformation - Type:", type(obs), "Keys:", list(obs.keys()) if isinstance(obs, dict) else "not dict")
             for k, v in obs.items():
-                print(f"  Buffer {k} shape: {v.shape if isinstance(v, np.ndarray) else 'not array'}")
+                #print(f"  Buffer {k} shape: {v.shape if isinstance(v, np.ndarray) else 'not array'}")
             obs = self.transform(obs)
-            print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, torch.Tensor) else "not tensor")
+            #print("Transformed obs type:", type(obs), "shape:", obs.shape if isinstance(obs, torch.Tensor) else "not tensor")
             if not isinstance(obs, torch.Tensor):
                 raise ValueError(f"Expected tensor after transform, got {type(obs)} with keys {list(obs.keys()) if isinstance(obs, dict) else 'not dict'}")
             obs = obs.permute(1, 2, 0).cpu().numpy()
-            print("Final obs type:", type(obs), "shape:", obs.shape)
+            #print("Final obs type:", type(obs), "shape:", obs.shape)
 
         return obs, rwd, done, {}
 
