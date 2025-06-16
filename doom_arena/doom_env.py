@@ -109,6 +109,14 @@ class PlayerEnv(Env):
         self.history = deque(maxlen=60)
         self.frame_stack = deque(maxlen=cfg.n_stack_frames)
 
+        self._buffers = ["screen"]
+        if self.cfg.use_labels:
+            self._buffers.append("labels")
+        if self.cfg.use_depth:
+            self._buffers.append("depth")
+        if self.cfg.use_automap:
+            self._buffers.append("automap")
+
     def repeat_action(self, action):
         cnt = 1
         while len(self.history) > cnt + 1 and self.history[-(cnt + 1)] == action:
