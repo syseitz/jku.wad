@@ -407,7 +407,9 @@ class VizdoomMPEnv(Env):
         crosshair: Sequence[bool] = True,
         hud: Sequence[str] = "full",
         seed: int = 1337,
+        frame_skip: int = 1,
     ):
+        self.frame_skip = frame_skip 
         if config_path == "doom_arena/scenarios/jku.cfg":
             assert doom_map in ["TRNM", "TRNMBIG", "ROOM"]
             if doom_map == "ROOM":
@@ -469,7 +471,7 @@ class VizdoomMPEnv(Env):
 
         self.envs = []
         for i, cfg in enumerate(self.players_cfg):
-            e = PlayerEnv(cfg, discrete7=discrete7, seed=seed)
+            e = PlayerEnv(cfg, discrete7=discrete7, frame_skip=self.frame_skip, seed=seed)
             self.envs.append(e)
 
         if len(self.envs) == 1:
