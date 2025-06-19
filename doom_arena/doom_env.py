@@ -392,6 +392,7 @@ class VizdoomMPEnv(Env):
     Heads-up display level. Options are `"full"`, `"minimal"`, or `"off"` (or `None`).
     """
 
+
     def __init__(
         self,
         config_path: str = "doom_arena/scenarios/jku.cfg",
