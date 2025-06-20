@@ -69,7 +69,7 @@ class PlayerEnv(Env):
         self,
         cfg: PlayerConfig,
         discrete7: bool = True,
-        frame_skip: int = 1,
+        frame_skip: int = 4,
         seed: int = 1337,
     ):
         self.cfg = cfg
@@ -171,7 +171,8 @@ class PlayerEnv(Env):
 
         # apply (frame) transforms
         if self.transform is not None:
-            obs = self.transform(obs)
+            obs = self.transform(obs).cpu().numpy()
+            obs = np.transpose(obs, (1, 2, 0))
         return obs
 
     def step(self, action):
@@ -201,9 +202,11 @@ class PlayerEnv(Env):
         self._record_replay(obs)
         self._update_game_vars()
         obs = self._update_frame_stack(obs)
+
         # apply (frame) transforms
         if self.transform is not None:
-            obs = self.transform(obs)
+            obs = self.transform(obs).cpu().numpy()  
+            obs = np.transpose(obs, (1, 2, 0))  
         return obs, rwd, done, {}
 
     def close(self):
@@ -505,10 +508,10 @@ class VizdoomMPEnv(Env):
 
     def reset(self, **kwargs):
         self.reward_fn.reset()
-        self.obs = self.env.reset(**kwargs)
+        obs = self.env.reset(**kwargs)
         if len(self.envs) == 1:
-            self.obs = [self.obs]
-        return self.obs
+            return obs 
+        return obs
 
     def enable_replay(self):
         print("Enabling replays!")
