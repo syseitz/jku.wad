@@ -504,7 +504,9 @@ class VizdoomMPEnv(Env):
 
         # total rewards
         rwds = [sum(rwd_p) for rwd_p in rwds]
-        return obs, rwds, done, info
+        if len(self.envs) == 1:
+            return obs, rwds[0], done, info 
+        return obs, rwds, done, info 
 
     def reset(self, **kwargs):
         self.reward_fn.reset()
