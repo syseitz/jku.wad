@@ -274,18 +274,43 @@ class PlayerEnv(Env):
     def _grab(self):
         state = self.game.get_state()
         done = self.game.is_episode_finished()
+        
         if done and state is None:
+            # Spiel beendet: Gebe ein Null-Array der Form (128, 128, 5) zurück
             obs = np.zeros((128, 128, 5), dtype=np.uint8)
         else:
+            # Spiel läuft: Verarbeite die Beobachtungen zu einem einheitlichen Array
             screen = state.screen_buffer
-            screen = screen[None] if screen.ndim == 2 else screen
-            obs = {"screen": screen}
+            # Stelle sicher, dass screen die richtige Form hat
+            if screen.ndim == 2:
+                screen = screen[..., None]  # Füge eine Dimension hinzu: (H, W) -> (H, W, 1)
+            
+            # Initialisiere das Ausgabe-Array mit Nullen
+            obs = np.zeros((128, 128, 5), dtype=np.uint8)
+            
+            # Fülle die ersten Kanäle mit dem Screen-Buffer
+            # Angenommen, screen hat die Form (128, 128, C), mit C <= 5
+            num_channels = min(screen.shape[-1], 5)
+            obs[..., :num_channels] = screen[..., :num_channels]
+            
+            # Optional: Weitere Buffer (labels, depth, automap) hinzufügen
             if state.labels_buffer is not None:
-                obs["labels"] = state.labels_buffer[None]
+                labels = state.labels_buffer
+                if labels.ndim == 2:
+                    labels = labels[..., None]  # (H, W) -> (H, W, 1)
+                # Füge Labels in einen freien Kanal, z. B. Kanal 3
+                obs[..., 3:4] = labels[..., :1]
+            
             if state.depth_buffer is not None:
-                obs["depth"] = state.depth_buffer[None]
-            if state.automap_buffer is not None:
-                obs["automap"] = state.automap_buffer
+                depth = state.depth_buffer
+                if depth.ndim == 2:
+                    depth = depth[..., None]
+                # Füge Depth in einen freien Kanal, z. B. Kanal 4
+                obs[..., 4:5] = depth[..., :1]
+                
+            # Hinweis: Automap wird hier ausgelassen, da es möglicherweise nicht passt.
+            # Falls nötig, müsste die Form des observation_space angepasst werden.
+
         return state, obs, done
 
     def _update_frame_stack(self, obs, reset: bool = False):
