@@ -271,22 +271,22 @@ class PlayerEnv(Env):
     #         if state.automap_buffer is not None:
     #             obs["automap"] = state.automap_buffer
     #     return state, obs, done
-        def _grab(self):
-            state = self.game.get_state()
-            done = self.game.is_episode_finished()
-            if done and state is None:
-                obs = np.zeros((128, 128, 5), dtype=np.uint8)
-            else:
-                screen = state.screen_buffer
-                screen = screen[None] if screen.ndim == 2 else screen
-                obs = {"screen": screen}
-                if state.labels_buffer is not None:
-                    obs["labels"] = state.labels_buffer[None]
-                if state.depth_buffer is not None:
-                    obs["depth"] = state.depth_buffer[None]
-                if state.automap_buffer is not None:
-                    obs["automap"] = state.automap_buffer
-            return state, obs, done
+    def _grab(self):
+        state = self.game.get_state()
+        done = self.game.is_episode_finished()
+        if done and state is None:
+            obs = np.zeros((128, 128, 5), dtype=np.uint8)
+        else:
+            screen = state.screen_buffer
+            screen = screen[None] if screen.ndim == 2 else screen
+            obs = {"screen": screen}
+            if state.labels_buffer is not None:
+                obs["labels"] = state.labels_buffer[None]
+            if state.depth_buffer is not None:
+                obs["depth"] = state.depth_buffer[None]
+            if state.automap_buffer is not None:
+                obs["automap"] = state.automap_buffer
+        return state, obs, done
 
     def _update_frame_stack(self, obs, reset: bool = False):
         if self.frame_stack.maxlen == 1:
